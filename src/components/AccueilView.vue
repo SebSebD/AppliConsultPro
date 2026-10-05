@@ -1,17 +1,13 @@
 <template>
   <div class="accueil-container">
-    <!-- En-tête Accueil -->
     <header class="accueil-header">
-      <h2>{{ nomProjet }}</h2>
       <p class="status-badge">
         <span class="status-dot green"></span>
-        Projet à jour
+        Système à jour
       </p>
     </header>
 
-    <h3 class="section-title">Modules principaux</h3>
-
-    <!-- Grille des modules iPadOS -->
+    <!-- Grille des modules -->
     <div class="modules-grid">
       <div 
         v-for="section in sectionsModules" 
@@ -40,14 +36,10 @@ const props = defineProps({
   projectId: {
     type: [Number, String],
     required: true
-  },
-  nomProjet: {
-    type: String,
-    default: 'Consultation'
   }
 })
 
-defineEmits(['naviguer'])
+const emit = defineEmits(['naviguer'])
 
 const sectionsModules = [
   { id: 'patients', nom: 'Patients', icone: '👥', couleur: '#6366f1', description: 'Gestion du répertoire patientèle' },
@@ -64,13 +56,7 @@ const sectionsModules = [
 }
 
 .accueil-header {
-  margin-bottom: 28px;
-}
-
-.accueil-header h2 {
-  font-size: 28px;
-  font-weight: 800;
-  color: #0f172a;
+  margin-bottom: 24px;
 }
 
 .status-badge {
@@ -79,7 +65,6 @@ const sectionsModules = [
   gap: 6px;
   font-size: 13px;
   color: #64748b;
-  margin-top: 4px;
 }
 
 .status-dot.green {
@@ -87,13 +72,6 @@ const sectionsModules = [
   height: 8px;
   border-radius: 50%;
   background-color: #22c55e;
-}
-
-.section-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 16px;
 }
 
 .modules-grid {
