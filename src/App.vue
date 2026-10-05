@@ -46,6 +46,32 @@ const sectionActuelle = computed(() => {
 const changerTab = (id) => {
   currentTab.value = id
 }
+
+// Gestion du Swipe / Glissement tactile sur la sidebar
+let touchStartX = 0
+let touchEndX = 0
+
+const handleTouchStart = (e) => {
+  touchStartX = e.changedTouches[0].screenX
+}
+
+const handleTouchEnd = (e) => {
+  touchEndX = e.changedTouches[0].screenX
+  gererSwipe()
+}
+
+const gererSwipe = () => {
+  const seuilSwipe = 50 // Distance minimale en pixels pour valider le geste
+  const deltaX = touchEndX - touchStartX
+
+  if (deltaX < -seuilSwipe) {
+    // Glissement vers la gauche -> Rétracter la sidebar
+    sidebarReduite.value = true
+  } else if (deltaX > seuilSwipe) {
+    // Glissement vers la droite -> Déployer la sidebar
+    sidebarReduite.value = false
+  }
+}
 </script>
 
 <template>
@@ -54,8 +80,12 @@ const changerTab = (id) => {
 
   <!-- Application principale -->
   <div v-else class="app-container" :class="{ 'sidebar-collapsed': sidebarReduite }">
-    <!-- Navigation latérale (Rétractable) -->
-    <aside class="sidebar">
+    <!-- Navigation latérale (Rétractable avec Swipe & Clic sur zone vide) -->
+    <aside 
+      class="sidebar"
+      @touchstart="handleTouchStart"
+      @touchend="handleTouchEnd"
+    >
       <div class="sidebar-header">
         <h2 v-if="!sidebarReduite">AppliDodo</h2>
         <div class="sidebar-actions">
@@ -82,6 +112,9 @@ const changerTab = (id) => {
           </div>
         </button>
       </nav>
+
+      <!-- Zone vide cliquable en bas pour basculer l'état -->
+      <div class="sidebar-empty-space" @click="sidebarReduite = !sidebarReduite" title="Cliquer pour basculer le menu"></div>
     </aside>
 
     <!-- Zone de travail principale -->
@@ -165,6 +198,7 @@ html, body, #app {
   flex-direction: column;
   transition: width 0.2s ease;
   flex-shrink: 0;
+  user-select: none;
 }
 
 .app-container.sidebar-collapsed .sidebar {
@@ -212,6 +246,13 @@ html, body, #app {
   gap: 6px;
   overflow-y: auto;
   flex: 1;
+}
+
+/* Zone vide cliquable en bas du menu */
+.sidebar-empty-space {
+  flex: 1;
+  min-height: 40px;
+  cursor: pointer;
 }
 
 .nav-btn {
