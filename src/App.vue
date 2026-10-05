@@ -1,5 +1,56 @@
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import LockScreen from './components/LockScreen.vue'
+import AccueilView from './components/AccueilView.vue'
+import PatientsView from './components/PatientsView.vue'
+import RecapPatientsView from './components/RecapPatientsView.vue'
+import SeancesView from './components/SeancesView.vue'
+import FacturesView from './components/FacturesView.vue'
+import UrssafView from './components/UrssafView.vue'
+
+// État d'authentification
+const isAuthenticated = ref(false)
+
+onMounted(() => {
+  const auth = sessionStorage.getItem('app_authenticated')
+  if (auth === 'true') {
+    isAuthenticated.value = true
+  }
+})
+
+const handleAuthenticated = () => {
+  isAuthenticated.value = true
+  sessionStorage.setItem('app_authenticated', 'true')
+}
+
+const currentTab = ref('accueil')
+const afficherPreferences = ref(false)
+const intervalleSauvegarde = ref(5)
+
+const sections = [
+  { id: 'accueil', nom: 'Accueil', couleur: '#3b82f6', description: "Vue d'ensemble et accès rapide" },
+  { id: 'patients', nom: 'Patients', couleur: '#6366f1', description: 'Gestion du répertoire patientèle' },
+  { id: 'recapPatients', nom: 'Récap Patients', couleur: '#14b8a6', description: 'Synthèse et statistiques par patient' },
+  { id: 'seances', nom: 'Séances', couleur: '#0d9488', description: 'Journal des rendez-vous et règlements' },
+  { id: 'factures', nom: 'Factures', couleur: '#f97316', description: 'Moteur de facturation' },
+  { id: 'urssaf', nom: 'URSSAF', couleur: '#22c55e', description: 'Calcul des cotisations par trimestre' }
+]
+
+const sectionActuelle = computed(() => {
+  return sections.find(s => s.id === currentTab.value)
+})
+
+const changerTab = (id) => {
+  currentTab.value = id
+}
+</script>
+
 <template>
-  <div class="app-container">
+  <!-- Écran de verrouillage si non authentifié -->
+  <LockScreen v-if="!isAuthenticated" @authenticated="handleAuthenticated" />
+
+  <!-- Application principale -->
+  <div v-else class="app-container">
     <!-- Navigation latérale (6 Sections iPad) -->
     <aside class="sidebar">
       <div class="sidebar-header">
@@ -73,37 +124,6 @@
     </div>
   </div>
 </template>
-
-<script setup>
-import { ref, computed } from 'vue'
-import AccueilView from './components/AccueilView.vue'
-import PatientsView from './components/PatientsView.vue'
-import RecapPatientsView from './components/RecapPatientsView.vue'
-import SeancesView from './components/SeancesView.vue'
-import FacturesView from './components/FacturesView.vue'
-import UrssafView from './components/UrssafView.vue'
-
-const currentTab = ref('accueil')
-const afficherPreferences = ref(false)
-const intervalleSauvegarde = ref(5)
-
-const sections = [
-  { id: 'accueil', nom: 'Accueil', couleur: '#3b82f6', description: "Vue d'ensemble et accès rapide" },
-  { id: 'patients', nom: 'Patients', couleur: '#6366f1', description: 'Gestion du répertoire patientèle' },
-  { id: 'recapPatients', nom: 'Récap Patients', couleur: '#14b8a6', description: 'Synthèse et statistiques par patient' },
-  { id: 'seances', nom: 'Séances', couleur: '#0d9488', description: 'Journal des rendez-vous et règlements' },
-  { id: 'factures', nom: 'Factures', couleur: '#f97316', description: 'Moteur de facturation' },
-  { id: 'urssaf', nom: 'URSSAF', couleur: '#22c55e', description: 'Calcul des cotisations par trimestre' }
-]
-
-const sectionActuelle = computed(() => {
-  return sections.find(s => s.id === currentTab.value)
-})
-
-const changerTab = (id) => {
-  currentTab.value = id
-}
-</script>
 
 <style>
 * {
