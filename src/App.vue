@@ -17,13 +17,13 @@ const handleAuthenticated = () => {
 }
 
 // --- État global de l'interface ---
-const currentTab = ref('accueilp')
+const currentTab = ref('accueil')
 const afficherPreferences = ref(false)
 const intervalleSauvegarde = ref(5)
 const sidebarReduite = ref(false) // État pour rétracter la barre latérale
 
 const sections = [
-  { id: 'accueil', nom: 'Accueil', couleur: '#3b82f6', description: "Vue d'ensemble et accès rapide" },
+  { id: 'accueil', nom: 'Accueil', couleur: '#3b82f6', description: "Vue d'ensemble et accès rapido" },
   { id: 'patients', nom: 'Patients', couleur: '#6366f1', description: 'Gestion du répertoire patientèle' },
   { id: 'recapPatients', nom: 'Récap Patients', couleur: '#14b8a6', description: 'Synthèse et statistiques par patient' },
   { id: 'seances', nom: 'Séances', couleur: '#0d9488', description: 'Journal des rendez-vous et règlements' },
