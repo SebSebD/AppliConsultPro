@@ -1,54 +1,53 @@
 <template>
-  <div class="patients-split-view">
-    <!-- Colonne unique ou liste principale -->
-    <aside class="patients-sidebar-full">
-      <div class="sidebar-actions">
-        <input 
-          v-model="texteRecherche" 
-          type="search" 
-          placeholder="Rechercher un patient..." 
-          class="search-input"
-        />
-        <button @click="ajouterPatient" class="btn-add-patient">
-          <span>+</span> Nouveau Patient
+  <div class="patients-main-container">
+    <!-- Barre d'actions (Recherche + Bouton Nouveau) -->
+    <div class="patients-top-bar">
+      <input 
+        v-model="texteRecherche" 
+        type="search" 
+        placeholder="Rechercher un patient..." 
+        class="search-input"
+      />
+      <button @click="ajouterPatient" class="btn-add-patient">
+        <span>+</span> Nouveau Patient
+      </button>
+    </div>
+
+    <!-- Grille ou liste des patients -->
+    <div class="patients-grid">
+      <div 
+        v-for="p in patientsFiltres" 
+        :key="p.id" 
+        class="patient-card-item"
+        @click="selectionnerPatient(p)"
+      >
+        <div class="patient-card-info">
+          <span class="patient-name" :style="{ color: calculerCouleurSolde(p.solde) }">
+            {{ formerNomComplet(p) }}
+          </span>
+          <span class="patient-tarif">
+            Tarif : {{ (p.tarifParDefaut ?? 60).toFixed(2) }} € / séance
+          </span>
+        </div>
+        <button 
+          @click.stop="demanderSuppression(p)" 
+          class="btn-trash" 
+          title="Supprimer"
+        >
+          🗑️
         </button>
       </div>
 
-      <div class="patients-list">
-        <div 
-          v-for="p in patientsFiltres" 
-          :key="p.id" 
-          class="patient-card-item"
-          @click="selectionnerPatient(p)"
-        >
-          <div class="patient-card-info">
-            <span class="patient-name" :style="{ color: calculerCouleurSolde(p.solde) }">
-              {{ formerNomComplet(p) }}
-            </span>
-            <span class="patient-tarif">
-              Tarif : {{ (p.tarifParDefaut ?? 60).toFixed(2) }} € / séance
-            </span>
-          </div>
-          <button 
-            @click.stop="demanderSuppression(p)" 
-            class="btn-trash" 
-            title="Supprimer"
-          >
-            🗑️
-          </button>
-        </div>
+      <p v-if="patientsFiltres.length === 0" class="empty-list-text">
+        {{ texteRecherche ? 'Aucun résultat' : 'Aucun patient enregistré' }}
+      </p>
+    </div>
 
-        <p v-if="patientsFiltres.length === 0" class="empty-list-text">
-          {{ texteRecherche ? 'Aucun résultat' : 'Aucun patient enregistré' }}
-        </p>
-      </div>
-    </aside>
-
-    <!-- Modale de Fiche / Édition Patient (Style Fenêtre Flottante) -->
-    <div v-if="patientSelectionne" class="modal-backdrop">
+    <!-- PETITE FENÊTRE MODALE D'ÉDITION (Style Récap Patients) -->
+    <div v-if="patientSelectionne" class="modal-backdrop" @click.self="fermerDetail">
       <div class="patient-modal-box">
         <header class="modal-header">
-          <h2>Fiche de : {{ formerNomComplet(form) }}</h2>
+          <h3>Fiche : {{ formerNomComplet(form) }}</h3>
           <button @click="fermerDetail" class="btn-close">✕</button>
         </header>
 
@@ -84,7 +83,7 @@
               </div>
             </fieldset>
 
-            <!-- Section 3: Coordonnées (Note d'honoraires) -->
+            <!-- Section 3: Coordonnées -->
             <fieldset class="form-section">
               <legend>Coordonnées (Note d'honoraires)</legend>
               <div class="form-row">
@@ -108,7 +107,7 @@
             <!-- Section 4: Notes & Suivi -->
             <fieldset class="form-section">
               <legend>Notes & Suivi</legend>
-              <textarea v-model="form.notes" placeholder="Notes de suivi..." rows="4" class="form-textarea"></textarea>
+              <textarea v-model="form.notes" placeholder="Notes de suivi..." rows="3" class="form-textarea"></textarea>
             </fieldset>
 
             <!-- Section 5: Situation Financière -->
@@ -131,7 +130,7 @@
     </div>
 
     <!-- Modal de confirmation de suppression -->
-    <div v-if="patientASupprimer" class="modal-backdrop">
+    <div v-if="patientASupprimer" class="modal-backdrop" @click.self="patientASupprimer = null">
       <div class="modal-box-delete">
         <h3>Supprimer le patient ?</h3>
         <p>Êtes-vous sûr de vouloir supprimer <strong>{{ formerNomComplet(patientASupprimer) }}</strong> ? Cette action est irréversible.</p>
@@ -304,8 +303,9 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.patients-split-view {
+.patients-main-container {
   display: flex;
+  flex-direction: column;
   height: calc(100vh - 110px);
   background: white;
   border-radius: 12px;
@@ -314,21 +314,13 @@ onMounted(() => {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
-/* Liste principale plein écran */
-.patients-sidebar-full {
-  width: 100%;
-  background-color: #f8fafc;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.sidebar-actions {
+.patients-top-bar {
   padding: 16px;
   display: flex;
   gap: 12px;
   border-bottom: 1px solid #e2e8f0;
-  background: white;
+  background: #f8fafc;
+  flex-shrink: 0;
 }
 
 .search-input {
@@ -338,6 +330,7 @@ onMounted(() => {
   border-radius: 8px;
   font-size: 15px;
   outline: none;
+  background: white;
 }
 
 .search-input:focus {
@@ -357,19 +350,20 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   transition: background 0.15s;
+  flex-shrink: 0;
 }
 
 .btn-add-patient:hover {
   background-color: #1d4ed8;
 }
 
-.patients-list {
+.patients-grid {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 20px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
   align-content: start;
 }
 
@@ -389,7 +383,8 @@ onMounted(() => {
 .patient-card-item:hover {
   border-color: #2563eb;
   background-color: #f8fafc;
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
 }
 
 .patient-card-info {
@@ -430,7 +425,7 @@ onMounted(() => {
   font-size: 15px;
 }
 
-/* --- MODALE FLOTTANTE DE LA FICHE PATIENT --- */
+/* --- MODALE FLOTTANTE --- */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -445,17 +440,17 @@ onMounted(() => {
 .patient-modal-box {
   background: white;
   width: 90%;
-  max-width: 650px;
+  max-width: 600px;
   max-height: 85vh;
-  border-radius: 14px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
 .modal-header {
-  padding: 20px 24px;
+  padding: 16px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -463,8 +458,8 @@ onMounted(() => {
   background: #f8fafc;
 }
 
-.modal-header h2 {
-  font-size: 20px;
+.modal-header h3 {
+  font-size: 18px;
   color: #0f172a;
   margin: 0;
 }
@@ -472,7 +467,7 @@ onMounted(() => {
 .btn-close {
   background: none;
   border: none;
-  font-size: 20px;
+  font-size: 18px;
   cursor: pointer;
   color: #64748b;
   padding: 4px;
@@ -483,30 +478,30 @@ onMounted(() => {
 }
 
 .modal-body-scroll {
-  padding: 24px;
+  padding: 20px;
   overflow-y: auto;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .form-section {
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 16px;
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 14px;
   background: #fafafa;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .form-section legend {
   font-weight: 700;
   font-size: 13px;
   color: #334155;
-  padding: 0 8px;
+  padding: 0 6px;
   background: #fafafa;
 }
 
@@ -514,14 +509,14 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
 
 .form-row label {
   font-size: 14px;
   font-weight: 500;
   color: #475569;
-  width: 180px;
+  width: 160px;
   flex-shrink: 0;
 }
 
@@ -573,12 +568,12 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
 }
 
 .modal-footer {
-  padding: 16px 24px;
+  padding: 14px 20px;
   border-top: 1px solid #e2e8f0;
   background: #f8fafc;
   display: flex;
@@ -586,7 +581,7 @@ onMounted(() => {
 }
 
 .btn-primary {
-  padding: 8px 20px;
+  padding: 8px 18px;
   background-color: #2563eb;
   color: white;
   border: none;
