@@ -1,5 +1,5 @@
 <template>
-  <div class="patients-split-view" :class="{ 'show-detail-mobile': patientSelectionne }">
+  <div class="patients-split-view" :class="{ 'show-detail': patientSelectionne }">
     <!-- Colonne de gauche : Répertoire & Recherche -->
     <aside class="patients-sidebar">
       <div class="sidebar-actions">
@@ -48,8 +48,8 @@
     <main class="patient-detail-panel">
       <div v-if="patientSelectionne" class="detail-container">
         <header class="detail-header">
-          <!-- Bouton Retour visible uniquement sur écran étroit / portrait -->
-          <button @click="patientSelectionne = null" class="btn-back-mobile">
+          <!-- Bouton Retour -->
+          <button @click="fermerDetail" class="btn-back-mobile">
             ← Retour à la liste
           </button>
           <h2>Fiche de : {{ formerNomComplet(form) }}</h2>
@@ -126,7 +126,7 @@
         </form>
       </div>
 
-      <!-- État vide si aucun patient sélectionné (mode grand écran) -->
+      <!-- État vide -->
       <div v-else class="empty-selection-state">
         <div class="empty-icon">📂</div>
         <h3>Sélectionnez un patient dans la liste</h3>
@@ -226,6 +226,10 @@ const selectionnerPatient = (p) => {
   setTimeout(() => { verrouillageMaj = false }, 50)
 }
 
+const fermerDetail = () => {
+  patientSelectionne.value = null
+}
+
 watch(form, async (nouveauForm) => {
   if (verrouillageMaj || !nouveauForm.id) return
   await db.patients.update(nouveauForm.id, {
@@ -312,6 +316,7 @@ onMounted(() => {
   border: 1px solid #e2e8f0;
   overflow: hidden;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  position: relative;
 }
 
 /* Sidebar Liste */
@@ -322,6 +327,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  height: 100%;
 }
 
 .sidebar-actions {
@@ -433,6 +439,7 @@ onMounted(() => {
   overflow-y: auto;
   padding: 30px;
   background: #ffffff;
+  height: 100%;
 }
 
 .detail-container {
@@ -455,12 +462,11 @@ onMounted(() => {
   margin: 0;
 }
 
-/* Bouton Retour masqué par défaut sur grand écran */
 .btn-back-mobile {
   display: none;
   background: #f1f5f9;
   border: 1px solid #cbd5e1;
-  padding: 8px 12px;
+  padding: 8px 14px;
   border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
@@ -633,34 +639,33 @@ onMounted(() => {
   font-weight: 600;
 }
 
-/* --- ADAPTATION MOBILE & IPAD PORTRAIT (Écrans étroits) --- */
-@media (max-width: 900px) {
-  /* Par défaut en portrait, on cache la sidebar et on affiche uniquement le détail, ou inversement */
-  .patients-sidebar {
-    width: 100%;
-    height: 100%;
-    display: flex;
-  }
-
+/* --- RÈGLES RESPONSIVES STRICTES (Écrans étroits et iPad Portrait) --- */
+@media (max-width: 1024px) {
+  /* Par défaut, on masque le panneau de détail et la liste prend toute la largeur */
   .patient-detail-panel {
     display: none;
     position: absolute;
     inset: 0;
-    z-index: 10;
-    padding: 16px;
+    z-index: 20;
+    width: 100%;
+    height: 100%;
     background: white;
   }
 
-  /* Quand un patient est sélectionné en mode portrait, on cache la liste et on affiche la fiche en plein écran */
-  .patients-split-view.show-detail-mobile .patients-sidebar {
+  .patients-sidebar {
+    width: 100%;
+  }
+
+  /* Dès qu'un patient est sélectionné (.show-detail), on cache la liste et on affiche la fiche en plein écran absolu */
+  .patients-split-view.show-detail .patients-sidebar {
     display: none;
   }
 
-  .patients-split-view.show-detail-mobile .patient-detail-panel {
+  .patients-split-view.show-detail .patient-detail-panel {
     display: block;
   }
 
-  /* On affiche le bouton retour en haut de la fiche */
+  /* On active le bouton de retour sur mobile/tablette portrait */
   .btn-back-mobile {
     display: inline-flex;
     align-items: center;
@@ -669,7 +674,7 @@ onMounted(() => {
   .detail-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 10px;
+    gap: 12px;
   }
 
   .form-row {
