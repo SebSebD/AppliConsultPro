@@ -27,6 +27,9 @@ const currentTab = ref('accueil')
 const afficherPreferences = ref(false)
 const intervalleSauvegarde = ref(5)
 
+// État pour rétracter la barre latérale
+const sidebarReduite = ref(false)
+
 const sections = [
   { id: 'accueil', nom: 'Accueil', couleur: '#3b82f6', description: "Vue d'ensemble et accès rapide" },
   { id: 'patients', nom: 'Patients', couleur: '#6366f1', description: 'Gestion du répertoire patientèle' },
@@ -43,6 +46,19 @@ const sectionActuelle = computed(() => {
 const changerTab = (id) => {
   currentTab.value = id
 }
+
+// Fonction pour basculer en plein écran natif du navigateur
+const togglePleinEcran = () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(err => {
+      console.error("Erreur passage plein écran:", err)
+    })
+  } else {
+    if (document.exitFullscreen) {
+      document.exitFullscreen()
+    }
+  }
+}
 </script>
 
 <template>
@@ -50,14 +66,22 @@ const changerTab = (id) => {
   <LockScreen v-if="!isAuthenticated" @authenticated="handleAuthenticated" />
 
   <!-- Application principale -->
-  <div v-else class="app-container">
-    <!-- Navigation latérale (6 Sections iPad) -->
+  <div v-else class="app-container" :class="{ 'sidebar-collapsed': sidebarReduite }">
+    <!-- Navigation latérale (Rétractable) -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <h2>AppliDodo</h2>
-        <button @click="afficherPreferences = true" class="btn-gear" title="Préférences">
-          ⚙️
-        </button>
+        <h2 v-if="!sidebarReduite">AppliDodo</h2>
+        <div class="sidebar-actions">
+          <button @click="sidebarReduite = !sidebarReduite" class="btn-icon" :title="sidebarReduite ? 'Agrandir le menu' : 'Rétracter le menu'">
+            {{ sidebarReduite ? '▶' : '◀' }}
+          </button>
+          <button @click="togglePleinEcran" class="btn-icon" title="Plein écran">
+            ⛶
+          </button>
+          <button @click="afficherPreferences = true" class="btn-icon" title="Préférences">
+            ⚙️
+          </button>
+        </div>
       </div>
       <nav class="sidebar-nav">
         <button 
@@ -65,9 +89,10 @@ const changerTab = (id) => {
           :key="section.id" 
           :class="['nav-btn', { active: currentTab === section.id }]"
           @click="currentTab = section.id"
+          :title="section.nom"
         >
           <span class="nav-icon-dot" :style="{ backgroundColor: section.couleur }"></span>
-          <div class="nav-btn-text">
+          <div v-if="!sidebarReduite" class="nav-btn-text">
             <span class="nav-label">{{ section.nom }}</span>
             <span class="nav-desc">{{ section.description }}</span>
           </div>
@@ -144,40 +169,65 @@ html, body, #app {
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+  transition: all 0.2s ease;
 }
 
+/* Sidebar normale et mode rétracté */
 .sidebar {
   width: 290px;
   background-color: #ffffff;
   border-right: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
+  transition: width 0.2s ease;
+  flex-shrink: 0;
+}
+
+.app-container.sidebar-collapsed .sidebar {
+  width: 76px;
 }
 
 .sidebar-header {
-  padding: 24px 20px 16px;
+  padding: 20px 16px;
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 73px;
 }
 
-.btn-gear {
+.sidebar-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-icon {
   background: none;
-  border: none;
-  font-size: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
   cursor: pointer;
-  opacity: 0.7;
+  background-color: #f8fafc;
+  transition: background 0.15s;
 }
 
-.btn-gear:hover { opacity: 1; }
+.btn-icon:hover { 
+  background-color: #f1f5f9; 
+}
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  padding: 12px;
+  padding: 12px 8px;
   gap: 6px;
   overflow-y: auto;
+  flex: 1;
 }
 
 .nav-btn {
@@ -192,6 +242,12 @@ html, body, #app {
   cursor: pointer;
   min-height: 52px;
   transition: background 0.15s ease;
+  width: 100%;
+}
+
+.app-container.sidebar-collapsed .nav-btn {
+  justify-content: center;
+  padding: 10px;
 }
 
 .nav-btn:hover { background-color: #f1f5f9; }
@@ -207,12 +263,16 @@ html, body, #app {
 .nav-btn-text {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .nav-label {
   font-size: 14px;
   font-weight: 600;
   color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .nav-btn.active .nav-label { color: #2563eb; }
@@ -221,19 +281,25 @@ html, body, #app {
   font-size: 11px;
   color: #64748b;
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* Zone principale avec défilement horizontal et vertical garanti */
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .top-bar {
   padding: 20px 30px;
   background-color: #ffffff;
   border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
 }
 
 .top-bar-sub {
@@ -243,7 +309,10 @@ html, body, #app {
 }
 
 .content-body {
-  padding: 30px;
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  overflow-x: auto; /* 👈 Permet de glisser horizontalement si un tableau est trop large sur iPad */
 }
 
 .card {

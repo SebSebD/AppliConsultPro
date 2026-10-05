@@ -1,6 +1,6 @@
 <template>
   <div class="patients-split-view">
-    <!-- Colonne de gauche : Répertoire & Recherche (320px) -->
+    <!-- Colonne de gauche : Répertoire & Recherche -->
     <aside class="patients-sidebar">
       <div class="sidebar-actions">
         <input 
@@ -44,11 +44,11 @@
       </div>
     </aside>
 
-    <!-- Colonne de droite : Fiche / Édition Patient -->
+    <!-- Colonne de droite : Fiche / Édition Patient en grand format -->
     <main class="patient-detail-panel">
       <div v-if="patientSelectionne" class="detail-container">
         <header class="detail-header">
-          <h2>{{ formerNomComplet(form) }}</h2>
+          <h2>Fiche de : {{ formerNomComplet(form) }}</h2>
         </header>
 
         <form @submit.prevent class="detail-form">
@@ -106,11 +106,11 @@
           <!-- Section 4: Notes & Suivi -->
           <fieldset class="form-section">
             <legend>Notes & Suivi</legend>
-            <textarea v-model="form.notes" placeholder="Notes de suivi..." rows="4" class="form-textarea"></textarea>
+            <textarea v-model="form.notes" placeholder="Notes de suivi..." rows="5" class="form-textarea"></textarea>
           </fieldset>
 
           <!-- Section 5: Situation Financière -->
-          <fieldset class="form-section">
+          <fieldset class="form-section financial-section">
             <legend>Situation Financière</legend>
             <div class="financial-summary-row">
               <span>Solde du patient :</span>
@@ -122,10 +122,11 @@
         </form>
       </div>
 
-      <!-- État vide -->
+      <!-- État vide si aucun patient sélectionné -->
       <div v-else class="empty-selection-state">
-        <div class="empty-icon">👤</div>
+        <div class="empty-icon">📂</div>
         <h3>Sélectionnez un patient dans la liste</h3>
+        <p>Ou cliquez sur <strong>"+ Nouveau Patient"</strong> pour en créer un.</p>
       </div>
     </main>
 
@@ -173,7 +174,6 @@ const chargerDonnees = async () => {
   patients.value = await db.patients.toArray()
   seances.value = await db.seances.toArray()
 
-  // Calcul du solde pour chaque patient dans la liste
   patients.value = patients.value.map(p => {
     const seancesPatient = seances.value.filter(s => s.patientId === p.id)
     const totalPaye = seancesPatient.reduce((acc, s) => acc + (Number(s.montant) || 0), 0)
@@ -192,9 +192,9 @@ const formerNomComplet = (p) => {
 }
 
 const calculerCouleurSolde = (solde = 0) => {
-  if (solde > 0.001) return '#16a34a' // Vert (avance)
-  if (solde < -0.001) return '#dc2626' // Rouge (dû)
-  return '#1e293b' // Équilibre
+  if (solde > 0.001) return '#16a34a'
+  if (solde < -0.001) return '#dc2626'
+  return '#1e293b'
 }
 
 const patientsFiltres = computed(() => {
@@ -222,7 +222,6 @@ const selectionnerPatient = (p) => {
   setTimeout(() => { verrouillageMaj = false }, 50)
 }
 
-// Auto-sauvegarde dynamique dès qu'un champ change
 watch(form, async (nouveauForm) => {
   if (verrouillageMaj || !nouveauForm.id) return
   await db.patients.update(nouveauForm.id, {
@@ -275,7 +274,6 @@ const confirmerSuppression = async () => {
   await chargerDonnees()
 }
 
-// Solde du patient sélectionné
 const seancesPatientForm = computed(() => {
   if (!form.id) return []
   return seances.value.filter(s => s.patientId === form.id)
@@ -304,51 +302,63 @@ onMounted(() => {
 <style scoped>
 .patients-split-view {
   display: flex;
-  height: calc(100vh - 120px);
+  height: calc(100vh - 110px);
   background: white;
   border-radius: 12px;
   border: 1px solid #e2e8f0;
   overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
-/* Sidebar */
+/* Sidebar Liste */
 .patients-sidebar {
-  width: 320px;
+  width: 340px;
   border-right: 1px solid #e2e8f0;
   background-color: #f8fafc;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .sidebar-actions {
-  padding: 14px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   border-bottom: 1px solid #e2e8f0;
   background: white;
 }
 
 .search-input {
-  padding: 8px 12px;
+  padding: 10px 14px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 15px;
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: #2563eb;
 }
 
 .btn-add-patient {
-  padding: 10px;
+  padding: 12px;
   background-color: #2563eb;
   color: white;
   border: none;
   border-radius: 8px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
+  transition: background 0.15s;
+}
+
+.btn-add-patient:hover {
+  background-color: #1d4ed8;
 }
 
 .patients-list {
@@ -357,7 +367,7 @@ onMounted(() => {
 }
 
 .patient-card-item {
-  padding: 12px 16px;
+  padding: 14px 18px;
   border-bottom: 1px solid #f1f5f9;
   display: flex;
   justify-content: space-between;
@@ -368,27 +378,27 @@ onMounted(() => {
 }
 
 .patient-card-item:hover {
-  background-color: #f8fafc;
+  background-color: #f1f5f9;
 }
 
 .patient-card-item.selected {
   background-color: #eff6ff;
-  border-left: 4px solid #2563eb;
+  border-left: 5px solid #2563eb;
 }
 
 .patient-card-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .patient-name {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
 }
 
 .patient-tarif {
-  font-size: 12px;
+  font-size: 13px;
   color: #64748b;
 }
 
@@ -396,8 +406,10 @@ onMounted(() => {
   background: none;
   border: none;
   cursor: pointer;
-  opacity: 0.6;
-  padding: 4px;
+  opacity: 0.5;
+  padding: 8px;
+  font-size: 16px;
+  transition: opacity 0.15s;
 }
 
 .btn-trash:hover {
@@ -405,89 +417,121 @@ onMounted(() => {
 }
 
 .empty-list-text {
-  padding: 20px;
+  padding: 30px;
   text-align: center;
   color: #94a3b8;
-  font-size: 13px;
+  font-size: 14px;
 }
 
-/* Detail Panel */
+/* Panneau de droite : Fiche Patient géante */
 .patient-detail-panel {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
-  background: white;
+  padding: 30px;
+  background: #ffffff;
+}
+
+.detail-container {
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 .detail-header h2 {
-  font-size: 22px;
+  font-size: 24px;
   color: #0f172a;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e2e8f0;
 }
 
 .form-section {
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 20px;
+  padding: 20px;
+  margin-bottom: 24px;
+  background: #fafafa;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .form-section legend {
-  font-weight: 600;
-  font-size: 13px;
-  color: #475569;
-  padding: 0 6px;
+  font-weight: 700;
+  font-size: 14px;
+  color: #334155;
+  padding: 0 8px;
+  background: #fafafa;
 }
 
 .form-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 20px;
 }
 
 .form-row label {
-  font-size: 14px;
-  color: #334155;
-  width: 220px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #475569;
+  width: 240px;
+  flex-shrink: 0;
 }
 
 .form-input {
   flex: 1;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 8px;
+  font-size: 15px;
+  background: white;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: #2563eb;
 }
 
 .number-input {
-  max-width: 120px;
+  max-width: 140px;
   text-align: right;
 }
 
 .form-textarea {
   width: 100%;
-  padding: 10px 12px;
+  padding: 12px;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 8px;
+  font-size: 15px;
+  background: white;
   resize: vertical;
+  outline: none;
+}
+
+.form-textarea:focus {
+  border-color: #2563eb;
+}
+
+.financial-section {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.financial-section legend {
+  background: #f0fdf4;
+  color: #166534;
 }
 
 .financial-summary-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 16px;
-  padding: 4px 0;
+  font-size: 18px;
+  font-weight: 600;
+  padding: 6px 0;
 }
 
-/* Empty Selection */
+/* État vide */
 .empty-selection-state {
   height: 100%;
   display: flex;
@@ -496,13 +540,19 @@ onMounted(() => {
   justify-content: center;
   color: #94a3b8;
   gap: 12px;
+  text-align: center;
 }
 
 .empty-icon {
-  font-size: 48px;
+  font-size: 64px;
 }
 
-/* Modal */
+.empty-selection-state h3 {
+  font-size: 20px;
+  color: #475569;
+}
+
+/* Modal suppression */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -515,43 +565,47 @@ onMounted(() => {
 
 .modal-box {
   background: white;
-  padding: 24px;
+  padding: 30px;
   border-radius: 12px;
-  max-width: 400px;
+  max-width: 450px;
   width: 90%;
   box-shadow: 0 10px 25px rgba(0,0,0,0.15);
 }
 
 .modal-box h3 {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  font-size: 20px;
 }
 
 .modal-box p {
-  font-size: 14px;
+  font-size: 15px;
   color: #475569;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  line-height: 1.5;
 }
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
 }
 
 .btn-cancel {
-  padding: 8px 16px;
+  padding: 10px 20px;
   border: 1px solid #cbd5e1;
   background: white;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
+  font-weight: 600;
 }
 
 .btn-confirm-delete {
-  padding: 8px 16px;
+  padding: 10px 20px;
   background: #ef4444;
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
+  font-weight: 600;
 }
 </style>
