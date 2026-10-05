@@ -8,7 +8,7 @@ import SeancesView from './components/SeancesView.vue'
 import FacturesView from './components/FacturesView.vue'
 import UrssafView from './components/UrssafView.vue'
 
-// --- État d'authentification --- coucou 
+// --- État d'authentification ---
 const isAuthenticated = ref(false)
 
 const handleAuthenticated = () => {
@@ -17,7 +17,7 @@ const handleAuthenticated = () => {
 }
 
 // --- État global de l'interface ---
-const currentTab = ref('accueil')
+const currentTab = ref('accueilp')
 const afficherPreferences = ref(false)
 const intervalleSauvegarde = ref(5)
 const sidebarReduite = ref(false) // État pour rétracter la barre latérale
