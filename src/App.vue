@@ -71,13 +71,14 @@ const togglePleinEcran = () => {
     <aside class="sidebar">
       <div class="sidebar-header">
         <h2 v-if="!sidebarReduite">AppliDodo</h2>
-        <div class="sidebar-actions">
-          <button @click="sidebarReduite = !sidebarReduite" class="btn-icon" :title="sidebarReduite ? 'Agrandir le menu' : 'Rétracter le menu'">
-                      {{ sidebarReduite ? '▶' : '◀' }}
-                    </button>
-                    <button @click="afficherPreferences = true" class="btn-icon" title="Préférences">
-                      ⚙️
-                    </button>
+          <div class="sidebar-actions">
+            <button @click="sidebarReduite = !sidebarReduite" class="btn-icon" :title="sidebarReduite ? 'Agrandir le menu' : 'Rétracter le menu'">
+              {{ sidebarReduite ? '▶' : '◀' }}
+            </button>
+            <button @click="afficherPreferences = true" class="btn-icon" title="Préférences">
+              ⚙️
+            </button>
+          </div>
         </div>
       </div>
       <nav class="sidebar-nav">
