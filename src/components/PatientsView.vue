@@ -1,5 +1,5 @@
 <template>
-  <div class="patients-split-view">
+  <div class="patients-split-view" :class="{ 'show-detail-mobile': patientSelectionne }">
     <!-- Colonne de gauche : Répertoire & Recherche -->
     <aside class="patients-sidebar">
       <div class="sidebar-actions">
@@ -44,10 +44,14 @@
       </div>
     </aside>
 
-    <!-- Colonne de droite : Fiche / Édition Patient en grand format -->
+    <!-- Colonne de droite : Fiche / Édition Patient -->
     <main class="patient-detail-panel">
       <div v-if="patientSelectionne" class="detail-container">
         <header class="detail-header">
+          <!-- Bouton Retour visible uniquement sur écran étroit / portrait -->
+          <button @click="patientSelectionne = null" class="btn-back-mobile">
+            ← Retour à la liste
+          </button>
           <h2>Fiche de : {{ formerNomComplet(form) }}</h2>
         </header>
 
@@ -122,7 +126,7 @@
         </form>
       </div>
 
-      <!-- État vide si aucun patient sélectionné -->
+      <!-- État vide si aucun patient sélectionné (mode grand écran) -->
       <div v-else class="empty-selection-state">
         <div class="empty-icon">📂</div>
         <h3>Sélectionnez un patient dans la liste</h3>
@@ -423,7 +427,7 @@ onMounted(() => {
   font-size: 14px;
 }
 
-/* Panneau de droite : Fiche Patient géante */
+/* Panneau de droite : Fiche Patient */
 .patient-detail-panel {
   flex: 1;
   overflow-y: auto;
@@ -436,12 +440,32 @@ onMounted(() => {
   margin: 0 auto;
 }
 
-.detail-header h2 {
-  font-size: 24px;
-  color: #0f172a;
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   margin-bottom: 24px;
   padding-bottom: 12px;
   border-bottom: 2px solid #e2e8f0;
+}
+
+.detail-header h2 {
+  font-size: 24px;
+  color: #0f172a;
+  margin: 0;
+}
+
+/* Bouton Retour masqué par défaut sur grand écran */
+.btn-back-mobile {
+  display: none;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+  color: #334155;
 }
 
 .form-section {
@@ -607,5 +631,60 @@ onMounted(() => {
   border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
+}
+
+/* --- ADAPTATION MOBILE & IPAD PORTRAIT (Écrans étroits) --- */
+@media (max-width: 900px) {
+  /* Par défaut en portrait, on cache la sidebar et on affiche uniquement le détail, ou inversement */
+  .patients-sidebar {
+    width: 100%;
+    height: 100%;
+    display: flex;
+  }
+
+  .patient-detail-panel {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    padding: 16px;
+    background: white;
+  }
+
+  /* Quand un patient est sélectionné en mode portrait, on cache la liste et on affiche la fiche en plein écran */
+  .patients-split-view.show-detail-mobile .patients-sidebar {
+    display: none;
+  }
+
+  .patients-split-view.show-detail-mobile .patient-detail-panel {
+    display: block;
+  }
+
+  /* On affiche le bouton retour en haut de la fiche */
+  .btn-back-mobile {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .form-row label {
+    width: 100%;
+  }
+
+  .number-input {
+    max-width: 100%;
+    text-align: left;
+  }
 }
 </style>
