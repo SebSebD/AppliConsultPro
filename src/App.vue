@@ -8,7 +8,7 @@ import SeancesView from './components/SeancesView.vue'
 import FacturesView from './components/FacturesView.vue'
 import UrssafView from './components/UrssafView.vue'
 
-// État d'authentification
+// État d'authentification (Corrigé avec localStorage pour la persistance)
 const isAuthenticated = ref(false)
 
 onMounted(() => {
@@ -16,11 +16,24 @@ onMounted(() => {
   if (auth === 'true') {
     isAuthenticated.value = true
   }
+  
+  // Chargement des projets
+  const savedList = localStorage.getItem('app_projects_list')
+  if (savedList) {
+    projectsList.value = JSON.parse(savedList)
+  }
+
+  const savedCurrent = localStorage.getItem('app_current_project')
+  if (savedCurrent && projectsList.value.includes(savedCurrent)) {
+    currentProject.value = savedCurrent
+  } else if (projectsList.value.length > 0) {
+    currentProject.value = projectsList.value[0]
+  }
 })
 
 const handleAuthenticated = () => {
   isAuthenticated.value = true
-  sessionStorage.setItem('app_authenticated', 'true')
+  localStorage.setItem('app_authenticated', 'true')
 }
 
 const currentTab = ref('accueil')
@@ -29,6 +42,50 @@ const intervalleSauvegarde = ref(5)
 
 // État pour rétracter la barre latérale
 const sidebarReduite = ref(false)
+
+// Gestion des Projets Dynamiques
+const currentProject = ref('Année 2026')
+const projectsList = ref(['Année 2026'])
+const showProjectModal = ref(false)
+const newProjectName = ref('')
+
+const switchProject = (projectName) => {
+  currentProject.value = projectName
+  localStorage.setItem('app_current_project', projectName)
+}
+
+const createProject = () => {
+  const name = newProjectName.value.trim()
+  if (name && !projectsList.value.includes(name)) {
+    projectsList.value.push(name)
+    localStorage.setItem('app_projects_list', JSON.stringify(projectsList.value))
+    switchProject(name)
+    newProjectName.value = ''
+    showProjectModal.value = false
+  }
+}
+
+const renameCurrentProject = () => {
+  const newName = prompt("Nouveau nom pour ce projet :", currentProject.value)
+  if (newName && newName.trim() && !projectsList.value.includes(newName.trim())) {
+    const oldName = currentProject.value
+    const trimmedNewName = newName.trim()
+
+    // Migration des données associées dans le localStorage s'il y en a
+    const oldData = localStorage.getItem(`project_${oldName}_data`)
+    if (oldData) {
+      localStorage.setItem(`project_${trimmedNewName}_data`, oldData)
+      localStorage.removeItem(`project_${oldName}_data`)
+    }
+
+    const index = projectsList.value.indexOf(oldName)
+    if (index !== -1) {
+      projectsList.value[index] = trimmedNewName
+    }
+    localStorage.setItem('app_projects_list', JSON.stringify(projectsList.value))
+    switchProject(trimmedNewName)
+  }
+}
 
 const sections = [
   { id: 'accueil', nom: 'Accueil', couleur: '#3b82f6', description: "Vue d'ensemble et accès rapide" },
@@ -87,7 +144,10 @@ const gererSwipe = () => {
       @touchend="handleTouchEnd"
     >
       <div class="sidebar-header">
-        <h2 v-if="!sidebarReduite">AppliDodo</h2>
+        <!-- Remplacement de "AppliDodo" par le nom du projet -->
+        <h2 v-if="!sidebarReduite" class="sidebar-project-title" @click="showProjectModal = true" title="Gérer les projets">
+          📂 {{ currentProject }}
+        </h2>
         <div class="sidebar-actions">
           <button @click="sidebarReduite = !sidebarReduite" class="btn-icon" :title="sidebarReduite ? 'Agrandir le menu' : 'Rétracter le menu'">
             {{ sidebarReduite ? '▶' : '◀' }}
@@ -119,9 +179,25 @@ const gererSwipe = () => {
 
     <!-- Zone de travail principale -->
     <main class="main-content">
-      <header class="top-bar">
-        <h1>{{ sectionActuelle?.nom }}</h1>
-        <p class="top-bar-sub">{{ sectionActuelle?.description }}</p>
+      <!-- En-tête avec titre de section à gauche et Nom du projet centré -->
+      <header class="top-bar custom-top-bar">
+        <div class="top-bar-left">
+          <h1>{{ sectionActuelle?.nom }}</h1>
+          <p class="top-bar-sub">{{ sectionActuelle?.description }}</p>
+        </div>
+
+        <!-- NOM DU PROJET CENTRE ET TOUJOURS VISIBLE -->
+        <div class="top-bar-center">
+          <div class="project-display-badge" @click="showProjectModal = true" title="Changer ou gérer les projets">
+            <span class="project-badge-icon">📂</span>
+            <span class="project-badge-name">{{ currentProject }}</span>
+          </div>
+          <button @click="renameCurrentProject" class="btn-icon-small" title="Renommer ce projet">✏️</button>
+        </div>
+
+        <div class="top-bar-right">
+          <button @click="showProjectModal = true" class="btn-secondary-small">📁 Projets</button>
+        </div>
       </header>
       
       <section class="content-body">
@@ -133,6 +209,55 @@ const gererSwipe = () => {
         <UrssafView v-if="currentTab === 'urssaf'" />
       </section>
     </main>
+
+    <!-- Modale de Gestion et Changement de Projets -->
+    <div v-if="showProjectModal" class="modal-backdrop">
+      <div class="modal-box project-modal-box">
+        <header class="modal-header">
+          <h3>📂 Gestion des Projets</h3>
+          <button @click="showProjectModal = false" class="btn-close">✕</button>
+        </header>
+
+        <div class="preferences-body">
+          <div class="pref-group">
+            <label>Projet actif actuel :</label>
+            <p class="active-project-highlight"><strong>{{ currentProject }}</strong></p>
+          </div>
+
+          <div class="pref-group">
+            <label>Basculer vers un autre projet :</label>
+            <div class="projects-list-container">
+              <button 
+                v-for="proj in projectsList" 
+                :key="proj"
+                @click="switchProject(proj); showProjectModal = false"
+                :class="['project-choice-btn', { active: proj === currentProject }]"
+              >
+                {{ proj }} <span v-if="proj === currentProject" class="active-tag">(Actif)</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="pref-group">
+            <label>Créer un nouveau projet :</label>
+            <div class="new-project-row">
+              <input 
+                type="text" 
+                v-model="newProjectName" 
+                placeholder="Ex: Année 2027, Cabinet B..." 
+                class="form-input"
+                @keyup.enter="createProject"
+              />
+              <button @click="createProject" class="btn-primary">Créer</button>
+            </div>
+          </div>
+        </div>
+
+        <footer class="modal-footer">
+          <button @click="showProjectModal = false" class="btn-secondary">Fermer</button>
+        </footer>
+      </div>
+    </div>
 
     <!-- Modal des Préférences -->
     <div v-if="afficherPreferences" class="modal-backdrop">
@@ -155,7 +280,7 @@ const gererSwipe = () => {
 
           <div class="pref-group">
             <label>Stockage local</label>
-            <p class="pref-desc">Base de données IndexedDB (Stockée sur le navigateur de l'appareil).</p>
+            <p class="pref-desc">Base de données IndexedDB / LocalStorage (Stockée sur le navigateur de l'appareil).</p>
           </div>
         </div>
 
@@ -212,6 +337,19 @@ html, body, #app {
   align-items: center;
   justify-content: space-between;
   min-height: 73px;
+}
+
+.sidebar-project-title {
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 1.1rem;
+  color: #1e293b;
+}
+
+.sidebar-project-title:hover {
+  color: #3b82f6;
 }
 
 .sidebar-actions {
@@ -327,6 +465,73 @@ html, body, #app {
   flex-shrink: 0;
 }
 
+.custom-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+}
+
+.top-bar-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.project-display-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+  transition: background 0.2s;
+}
+
+.project-display-badge:hover {
+  background: #e2e8f0;
+}
+
+.btn-icon-small {
+  background: none;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background-color: #f8fafc;
+  transition: background 0.15s;
+}
+
+.btn-icon-small:hover {
+  background-color: #f1f5f9;
+}
+
+.btn-secondary-small {
+  padding: 6px 12px;
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #475569;
+}
+
+.btn-secondary-small:hover {
+  background-color: #e2e8f0;
+}
+
 .top-bar-sub {
   font-size: 13px;
   color: #64748b;
@@ -399,16 +604,62 @@ html, body, #app {
   color: #64748b;
 }
 
+.active-project-highlight {
+  font-size: 15px;
+  color: #2563eb;
+}
+
+.projects-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+  margin-top: 5px;
+}
+
+.project-choice-btn {
+  padding: 8px 12px;
+  text-align: left;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  display: flex;
+  justify-content: space-between;
+}
+
+.project-choice-btn.active {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #3b82f6;
+  font-weight: 600;
+}
+
+.active-tag {
+  font-size: 12px;
+  color: #2563eb;
+}
+
+.new-project-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 5px;
+}
+
 .form-input {
   padding: 10px 12px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   font-size: 14px;
+  flex: 1;
 }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 .btn-primary {
@@ -416,6 +667,16 @@ html, body, #app {
   background-color: #2563eb;
   color: white;
   border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-secondary {
+  padding: 8px 16px;
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
   border-radius: 6px;
   font-weight: 600;
   cursor: pointer;

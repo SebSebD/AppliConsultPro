@@ -1,19 +1,17 @@
 import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
+import vue from '@vitejs/vite-plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  // 👈 Ajout indispensable pour GitHub Pages
-  base: '/AppliConsultPro/',
-  
+  base: '/AppliConsultPro/', // Assure-toi que c'est bien le nom exact de ton dépôt GitHub
   plugins: [
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'AppliDodo',
-        short_name: 'AppliDodo',
+        name: 'AppliConsultPro',
+        short_name: 'AppliConsultPro',
         description: 'Application de gestion et suivi patient',
         theme_color: '#3b82f6',
         background_color: '#f8fafc',
