@@ -1,7 +1,7 @@
 <template>
-  <div class="patients-split-view" :class="{ 'show-detail': patientSelectionne }">
-    <!-- Colonne de gauche : Répertoire & Recherche -->
-    <aside class="patients-sidebar">
+  <div class="patients-split-view">
+    <!-- Colonne unique ou liste principale -->
+    <aside class="patients-sidebar-full">
       <div class="sidebar-actions">
         <input 
           v-model="texteRecherche" 
@@ -18,7 +18,7 @@
         <div 
           v-for="p in patientsFiltres" 
           :key="p.id" 
-          :class="['patient-card-item', { selected: patientSelectionne?.id === p.id }]"
+          class="patient-card-item"
           @click="selectionnerPatient(p)"
         >
           <div class="patient-card-info">
@@ -44,99 +44,95 @@
       </div>
     </aside>
 
-    <!-- Colonne de droite : Fiche / Édition Patient -->
-    <main class="patient-detail-panel">
-      <div v-if="patientSelectionne" class="detail-container">
-        <header class="detail-header">
-          <!-- Bouton Retour -->
-          <button @click="fermerDetail" class="btn-back-mobile">
-            ← Retour à la liste
-          </button>
+    <!-- Modale de Fiche / Édition Patient (Style Fenêtre Flottante) -->
+    <div v-if="patientSelectionne" class="modal-backdrop">
+      <div class="patient-modal-box">
+        <header class="modal-header">
           <h2>Fiche de : {{ formerNomComplet(form) }}</h2>
+          <button @click="fermerDetail" class="btn-close">✕</button>
         </header>
 
-        <form @submit.prevent class="detail-form">
-          <!-- Section 1: Informations Personnelles -->
-          <fieldset class="form-section">
-            <legend>Informations Personnelles</legend>
-            <div class="form-row">
-              <label>Nom</label>
-              <input v-model="form.nom" type="text" placeholder="Nom" class="form-input" />
-            </div>
-            <div class="form-row">
-              <label>Prénom</label>
-              <input v-model="form.prenom" type="text" placeholder="Prénom" class="form-input" />
-            </div>
-            <div class="form-row">
-              <label>Date de naissance</label>
-              <input v-model="form.dateNaissance" type="text" placeholder="ex: 03/05/1996" class="form-input" />
-            </div>
-          </fieldset>
+        <div class="modal-body-scroll">
+          <form @submit.prevent class="detail-form">
+            <!-- Section 1: Informations Personnelles -->
+            <fieldset class="form-section">
+              <legend>Informations Personnelles</legend>
+              <div class="form-row">
+                <label>Nom</label>
+                <input v-model="form.nom" type="text" placeholder="Nom" class="form-input" />
+              </div>
+              <div class="form-row">
+                <label>Prénom</label>
+                <input v-model="form.prenom" type="text" placeholder="Prénom" class="form-input" />
+              </div>
+              <div class="form-row">
+                <label>Date de naissance</label>
+                <input v-model="form.dateNaissance" type="text" placeholder="ex: 03/05/1996" class="form-input" />
+              </div>
+            </fieldset>
 
-          <!-- Section 2: Tarification & Rendez-vous -->
-          <fieldset class="form-section">
-            <legend>Tarification & Rendez-vous</legend>
-            <div class="form-row">
-              <label>Tarif par séance (€)</label>
-              <input v-model.number="form.tarifParDefaut" type="number" step="0.5" class="form-input number-input" />
-            </div>
-            <div class="form-row">
-              <label>Date du 1er RDV</label>
-              <input v-model="form.datePremierRdv" type="date" class="form-input" />
-            </div>
-          </fieldset>
+            <!-- Section 2: Tarification & Rendez-vous -->
+            <fieldset class="form-section">
+              <legend>Tarification & Rendez-vous</legend>
+              <div class="form-row">
+                <label>Tarif par séance (€)</label>
+                <input v-model.number="form.tarifParDefaut" type="number" step="0.5" class="form-input number-input" />
+              </div>
+              <div class="form-row">
+                <label>Date du 1er RDV</label>
+                <input v-model="form.datePremierRdv" type="date" class="form-input" />
+              </div>
+            </fieldset>
 
-          <!-- Section 3: Coordonnées (Note d'honoraires) -->
-          <fieldset class="form-section">
-            <legend>Coordonnées (Note d'honoraires)</legend>
-            <div class="form-row">
-              <label>Numéro et rue</label>
-              <input v-model="form.adresseLigne1" type="text" placeholder="Adresse" class="form-input" />
-            </div>
-            <div class="form-row">
-              <label>Complément, CP, ville</label>
-              <input v-model="form.adresseLigne2" type="text" placeholder="Code postal & ville" class="form-input" />
-            </div>
-            <div class="form-row">
-              <label>E-mail</label>
-              <input v-model="form.email" type="email" placeholder="E-mail" class="form-input" />
-            </div>
-            <div class="form-row">
-              <label>Téléphone</label>
-              <input v-model="form.telephone" type="tel" placeholder="Téléphone" class="form-input" />
-            </div>
-          </fieldset>
+            <!-- Section 3: Coordonnées (Note d'honoraires) -->
+            <fieldset class="form-section">
+              <legend>Coordonnées (Note d'honoraires)</legend>
+              <div class="form-row">
+                <label>Numéro et rue</label>
+                <input v-model="form.adresseLigne1" type="text" placeholder="Adresse" class="form-input" />
+              </div>
+              <div class="form-row">
+                <label>Complément, CP, ville</label>
+                <input v-model="form.adresseLigne2" type="text" placeholder="Code postal & ville" class="form-input" />
+              </div>
+              <div class="form-row">
+                <label>E-mail</label>
+                <input v-model="form.email" type="email" placeholder="E-mail" class="form-input" />
+              </div>
+              <div class="form-row">
+                <label>Téléphone</label>
+                <input v-model="form.telephone" type="tel" placeholder="Téléphone" class="form-input" />
+              </div>
+            </fieldset>
 
-          <!-- Section 4: Notes & Suivi -->
-          <fieldset class="form-section">
-            <legend>Notes & Suivi</legend>
-            <textarea v-model="form.notes" placeholder="Notes de suivi..." rows="5" class="form-textarea"></textarea>
-          </fieldset>
+            <!-- Section 4: Notes & Suivi -->
+            <fieldset class="form-section">
+              <legend>Notes & Suivi</legend>
+              <textarea v-model="form.notes" placeholder="Notes de suivi..." rows="4" class="form-textarea"></textarea>
+            </fieldset>
 
-          <!-- Section 5: Situation Financière -->
-          <fieldset class="form-section financial-section">
-            <legend>Situation Financière</legend>
-            <div class="financial-summary-row">
-              <span>Solde du patient :</span>
-              <strong :style="{ color: couleurSoldeForm }">
-                {{ texteSoldeForm }}
-              </strong>
-            </div>
-          </fieldset>
-        </form>
+            <!-- Section 5: Situation Financière -->
+            <fieldset class="form-section financial-section">
+              <legend>Situation Financière</legend>
+              <div class="financial-summary-row">
+                <span>Solde du patient :</span>
+                <strong :style="{ color: couleurSoldeForm }">
+                  {{ texteSoldeForm }}
+                </strong>
+              </div>
+            </fieldset>
+          </form>
+        </div>
+
+        <footer class="modal-footer">
+          <button @click="fermerDetail" class="btn-primary">Fermer</button>
+        </footer>
       </div>
-
-      <!-- État vide -->
-      <div v-else class="empty-selection-state">
-        <div class="empty-icon">📂</div>
-        <h3>Sélectionnez un patient dans la liste</h3>
-        <p>Ou cliquez sur <strong>"+ Nouveau Patient"</strong> pour en créer un.</p>
-      </div>
-    </main>
+    </div>
 
     <!-- Modal de confirmation de suppression -->
     <div v-if="patientASupprimer" class="modal-backdrop">
-      <div class="modal-box">
+      <div class="modal-box-delete">
         <h3>Supprimer le patient ?</h3>
         <p>Êtes-vous sûr de vouloir supprimer <strong>{{ formerNomComplet(patientASupprimer) }}</strong> ? Cette action est irréversible.</p>
         <div class="modal-actions">
@@ -316,30 +312,27 @@ onMounted(() => {
   border: 1px solid #e2e8f0;
   overflow: hidden;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-  position: relative;
 }
 
-/* Sidebar Liste */
-.patients-sidebar {
-  width: 340px;
-  border-right: 1px solid #e2e8f0;
+/* Liste principale plein écran */
+.patients-sidebar-full {
+  width: 100%;
   background-color: #f8fafc;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
   height: 100%;
 }
 
 .sidebar-actions {
   padding: 16px;
   display: flex;
-  flex-direction: column;
   gap: 12px;
   border-bottom: 1px solid #e2e8f0;
   background: white;
 }
 
 .search-input {
+  flex: 1;
   padding: 10px 14px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
@@ -352,7 +345,7 @@ onMounted(() => {
 }
 
 .btn-add-patient {
-  padding: 12px;
+  padding: 10px 20px;
   background-color: #2563eb;
   color: white;
   border: none;
@@ -362,7 +355,6 @@ onMounted(() => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
   transition: background 0.15s;
 }
@@ -374,26 +366,30 @@ onMounted(() => {
 .patients-list {
   flex: 1;
   overflow-y: auto;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+  align-content: start;
 }
 
 .patient-card-item {
-  padding: 14px 18px;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
   background: white;
-  transition: background 0.15s;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
 }
 
 .patient-card-item:hover {
-  background-color: #f1f5f9;
-}
-
-.patient-card-item.selected {
-  background-color: #eff6ff;
-  border-left: 5px solid #2563eb;
+  border-color: #2563eb;
+  background-color: #f8fafc;
+  transform: translateY(-1px);
 }
 
 .patient-card-info {
@@ -427,67 +423,88 @@ onMounted(() => {
 }
 
 .empty-list-text {
-  padding: 30px;
+  grid-column: 1 / -1;
+  padding: 40px;
   text-align: center;
   color: #94a3b8;
-  font-size: 14px;
+  font-size: 15px;
 }
 
-/* Panneau de droite : Fiche Patient */
-.patient-detail-panel {
-  flex: 1;
-  overflow-y: auto;
-  padding: 30px;
-  background: #ffffff;
-  height: 100%;
-}
-
-.detail-container {
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.detail-header {
+/* --- MODALE FLOTTANTE DE LA FICHE PATIENT --- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid #e2e8f0;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(2px);
 }
 
-.detail-header h2 {
-  font-size: 24px;
+.patient-modal-box {
+  background: white;
+  width: 90%;
+  max-width: 650px;
+  max-height: 85vh;
+  border-radius: 14px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.modal-header h2 {
+  font-size: 20px;
   color: #0f172a;
   margin: 0;
 }
 
-.btn-back-mobile {
-  display: none;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  padding: 8px 14px;
-  border-radius: 6px;
-  font-weight: 600;
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 20px;
   cursor: pointer;
-  font-size: 14px;
-  color: #334155;
+  color: #64748b;
+  padding: 4px;
 }
 
-.form-section {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 20px;
-  margin-bottom: 24px;
-  background: #fafafa;
+.btn-close:hover {
+  color: #0f172a;
+}
+
+.modal-body-scroll {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
+.form-section {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .form-section legend {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
   color: #334155;
   padding: 0 8px;
   background: #fafafa;
@@ -497,23 +514,23 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
 }
 
 .form-row label {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   color: #475569;
-  width: 240px;
+  width: 180px;
   flex-shrink: 0;
 }
 
 .form-input {
   flex: 1;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 15px;
+  border-radius: 6px;
+  font-size: 14px;
   background: white;
   outline: none;
 }
@@ -523,16 +540,16 @@ onMounted(() => {
 }
 
 .number-input {
-  max-width: 140px;
+  max-width: 120px;
   text-align: right;
 }
 
 .form-textarea {
   width: 100%;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 15px;
+  border-radius: 6px;
+  font-size: 14px;
   background: white;
   resize: vertical;
   outline: none;
@@ -556,140 +573,73 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
-  padding: 6px 0;
 }
 
-/* État vide */
-.empty-selection-state {
-  height: 100%;
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #94a3b8;
-  gap: 12px;
-  text-align: center;
+  justify-content: flex-end;
 }
 
-.empty-icon {
-  font-size: 64px;
+.btn-primary {
+  padding: 8px 20px;
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
 }
 
-.empty-selection-state h3 {
-  font-size: 20px;
-  color: #475569;
+.btn-primary:hover {
+  background-color: #1d4ed8;
 }
 
-/* Modal suppression */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.modal-box {
+/* Modale de suppression */
+.modal-box-delete {
   background: white;
-  padding: 30px;
+  padding: 24px;
   border-radius: 12px;
-  max-width: 450px;
+  max-width: 400px;
   width: 90%;
   box-shadow: 0 10px 25px rgba(0,0,0,0.15);
 }
 
-.modal-box h3 {
-  margin-bottom: 12px;
-  font-size: 20px;
+.modal-box-delete h3 {
+  margin-bottom: 10px;
 }
 
-.modal-box p {
-  font-size: 15px;
+.modal-box-delete p {
+  font-size: 14px;
   color: #475569;
-  margin-bottom: 24px;
-  line-height: 1.5;
+  margin-bottom: 20px;
 }
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
 }
 
 .btn-cancel {
-  padding: 10px 20px;
+  padding: 8px 16px;
   border: 1px solid #cbd5e1;
   background: white;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
-  font-weight: 600;
 }
 
 .btn-confirm-delete {
-  padding: 10px 20px;
+  padding: 8px 16px;
   background: #ef4444;
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
-  font-weight: 600;
-}
-
-/* --- RÈGLES RESPONSIVES STRICTES (Écrans étroits et iPad Portrait) --- */
-@media (max-width: 1024px) {
-  /* Par défaut, on masque le panneau de détail et la liste prend toute la largeur */
-  .patient-detail-panel {
-    display: none;
-    position: absolute;
-    inset: 0;
-    z-index: 20;
-    width: 100%;
-    height: 100%;
-    background: white;
-  }
-
-  .patients-sidebar {
-    width: 100%;
-  }
-
-  /* Dès qu'un patient est sélectionné (.show-detail), on cache la liste et on affiche la fiche en plein écran absolu */
-  .patients-split-view.show-detail .patients-sidebar {
-    display: none;
-  }
-
-  .patients-split-view.show-detail .patient-detail-panel {
-    display: block;
-  }
-
-  /* On active le bouton de retour sur mobile/tablette portrait */
-  .btn-back-mobile {
-    display: inline-flex;
-    align-items: center;
-  }
-
-  .detail-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .form-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-  }
-
-  .form-row label {
-    width: 100%;
-  }
-
-  .number-input {
-    max-width: 100%;
-    text-align: left;
-  }
 }
 </style>
