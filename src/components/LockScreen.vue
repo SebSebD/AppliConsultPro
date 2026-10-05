@@ -1,20 +1,26 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 const emit = defineEmits(['authenticated'])
 const password = ref('')
 const error = ref(false)
 
-// 🔑 Définis ici ton mot de passe personnel
+// 🔑 Mot de passe global
 const CORRECT_PASSWORD = 'dodo' 
 
+// Réinitialise l'erreur dès que l'utilisateur retape quelque chose
+watch(password, () => {
+  if (error.value) error.value = false
+})
+
 const handleLogin = () => {
-  if (password.value === CORRECT_PASSWORD) {
+  if (password.value.trim() === CORRECT_PASSWORD) {
     error.value = false
-    // On enregistre de façon persistante dans le navigateur
+    // Stockage de l'authentification globale
     localStorage.setItem('app_authenticated', 'true')
-    // On prévient le composant parent que l'accès est autorisé
+    // Notification du composant parent
     emit('authenticated')
+    password.value = ''
   } else {
     error.value = true
   }

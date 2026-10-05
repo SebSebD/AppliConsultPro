@@ -139,8 +139,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { db } from '../db.js'
+
+// 1. Déclaration de la prop projectId transmise depuis le composant parent
+const props = defineProps({
+  projectId: {
+    type: [Number, String],
+    required: true
+  }
+})
 
 const patients = ref([])
 const seances = ref([])
@@ -156,9 +164,13 @@ const filtres = [
   { id: 'aJour', label: 'À jour' }
 ]
 
+// 2. Chargement des données filtrées par projectId
 const chargerDonnees = async () => {
-  patients.value = await db.patients.toArray()
-  seances.value = await db.seances.toArray()
+  const tousLesPatients = await db.patients.toArray()
+  const toutesLesSeances = await db.seances.toArray()
+
+  patients.value = tousLesPatients.filter(p => p.projectId === props.projectId)
+  seances.value = toutesLesSeances.filter(s => s.projectId === props.projectId)
 }
 
 const formerNomComplet = (p) => {
@@ -290,6 +302,12 @@ const bilanTrimestres = computed(() => {
     const totalPaye = sTrim.reduce((sum, s) => sum + (Number(s.montant) || 0), 0)
     return { label, count, totalPaye }
   })
+})
+
+// 3. Réaction automatique au changement de projet actif
+watch(() => props.projectId, () => {
+  patientDetail.value = null
+  chargerDonnees()
 })
 
 onMounted(() => {

@@ -147,6 +147,14 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { db } from '../db.js'
 
+// 1. Récupération de l'ID du projet actif transmis par le composant parent
+const props = defineProps({
+  projectId: {
+    type: [Number, String],
+    required: true
+  }
+})
+
 const patients = ref([])
 const seances = ref([])
 const texteRecherche = ref('')
@@ -169,9 +177,14 @@ const form = reactive({
 
 let verrouillageMaj = false
 
+// 2. Chargement des données filtrées selon le projet actif
 const chargerDonnees = async () => {
-  patients.value = await db.patients.toArray()
-  seances.value = await db.seances.toArray()
+  const tousLesPatients = await db.patients.toArray()
+  const toutesLesSeances = await db.seances.toArray()
+
+  // Isolation des données du projet actuel
+  patients.value = tousLesPatients.filter(p => p.projectId === props.projectId)
+  seances.value = toutesLesSeances.filter(s => s.projectId === props.projectId)
 
   patients.value = patients.value.map(p => {
     const seancesPatient = seances.value.filter(s => s.patientId === p.id)
@@ -242,9 +255,11 @@ watch(form, async (nouveauForm) => {
   await chargerDonnees()
 }, { deep: true })
 
+// 3. Associaton systématique du projet lors de la création
 const ajouterPatient = async () => {
   const count = patients.value.length
   const newId = await db.patients.add({
+    projectId: props.projectId, // Rattachement au projet actif
     numero: count + 1,
     nom: 'NOUVEAU',
     prenom: 'Patient',
@@ -295,6 +310,12 @@ const texteSoldeForm = computed(() => {
   if (s > 0.001) return `${s.toFixed(2)} € (avance)`
   if (s < -0.001) return `${Math.abs(s).toFixed(2)} € (dû)`
   return '0,00 € (Équilibre)'
+})
+
+// 4. Rechargement si le projet change dynamiquement
+watch(() => props.projectId, () => {
+  patientSelectionne.value = null
+  chargerDonnees()
 })
 
 onMounted(() => {

@@ -347,8 +347,16 @@
 </template> 
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { db } from '../db.js'
+
+// 1. Déclaration de la prop projectId transmise par le composant parent
+const props = defineProps({
+  projectId: {
+    type: [Number, String],
+    required: true
+  }
+})
 
 const patients = ref([])
 const patientSelectionneId = ref(null)
@@ -400,9 +408,10 @@ const nouvelleDescriptionTexte = ref('')
 const descriptionEnEdition = ref(null)
 const texteModifie = ref('')
 
-// Charger les patients depuis Dexie IndexedDB
+// 2. Charger les patients du projet actif depuis Dexie IndexedDB
 const chargerPatients = async () => {
-  patients.value = await db.patients.toArray()
+  const tousLesPatients = await db.patients.toArray()
+  patients.value = tousLesPatients.filter(p => p.projectId === props.projectId)
 }
 
 const patientAssocie = computed(() => {
@@ -515,6 +524,14 @@ const formaterDateFr = (dateStr) => {
 const imprimerA4 = () => {
   window.print()
 }
+
+// 3. Réinitialisation des champs et rechargement des patients lors du changement de projet
+watch(() => props.projectId, () => {
+  recherchePatient.value = ''
+  patientSelectionneId.value = null
+  afficherFenetreVisualisation.value = false
+  chargerPatients()
+})
 
 onMounted(() => {
   chargerPatients()

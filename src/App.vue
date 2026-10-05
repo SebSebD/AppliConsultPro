@@ -229,13 +229,39 @@ const gererSwipe = () => {
         </div>
       </header>
       
+      <!-- Zone de contenu dynamisée par l'ID du projet actif -->
       <section class="content-body">
-        <AccueilView v-if="currentTab === 'accueil'" @naviguer="changerTab" />
-        <PatientsView v-if="currentTab === 'patients'" />
-        <RecapPatientsView v-if="currentTab === 'recapPatients'" />
-        <SeancesView v-if="currentTab === 'seances'" />
-        <FacturesView v-if="currentTab === 'factures'" />
-        <UrssafView v-if="currentTab === 'urssaf'" />
+        <AccueilView 
+          v-if="currentTab === 'accueil'" 
+          @naviguer="changerTab" 
+          :project-id="activeProjectId" 
+          :key="activeProjectId" 
+        />
+        <PatientsView 
+          v-if="currentTab === 'patients'" 
+          :project-id="activeProjectId" 
+          :key="activeProjectId" 
+        />
+        <RecapPatientsView 
+          v-if="currentTab === 'recapPatients'" 
+          :project-id="activeProjectId" 
+          :key="activeProjectId" 
+        />
+        <SeancesView 
+          v-if="currentTab === 'seances'" 
+          :project-id="activeProjectId" 
+          :key="activeProjectId" 
+        />
+        <FacturesView 
+          v-if="currentTab === 'factures'" 
+          :project-id="activeProjectId" 
+          :key="activeProjectId" 
+        />
+        <UrssafView 
+          v-if="currentTab === 'urssaf'" 
+          :project-id="activeProjectId" 
+          :key="activeProjectId" 
+        />
       </section>
     </main>
 

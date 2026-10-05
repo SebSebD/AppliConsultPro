@@ -36,7 +36,11 @@
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
+  projectId: {
+    type: [Number, String],
+    required: true
+  },
   nomProjet: {
     type: String,
     default: 'Consultation'

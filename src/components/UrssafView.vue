@@ -37,14 +37,24 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { db } from '../db.js'
+
+// 1. Récupération du projet actif transmis par App.vue
+const props = defineProps({
+  projectId: {
+    type: [Number, String],
+    required: true
+  }
+})
 
 const seances = ref([])
 const anneeCourante = new Date().getFullYear()
 
+// 2. Chargement des séances uniquement rattachées au projet actif
 const chargerDonnees = async () => {
-  seances.value = await db.seances.toArray()
+  const toutesLesSeances = await db.seances.toArray()
+  seances.value = toutesLesSeances.filter(s => s.projectId === props.projectId)
 }
 
 const seancesAnnee = computed(() => {
@@ -70,6 +80,11 @@ const totalTrimestre4 = computed(() => totalPourTrimestre(10, 12))
 
 const totalAnnuel = computed(() => {
   return seancesAnnee.value.reduce((sum, s) => sum + (Number(s.montant) || 0), 0)
+})
+
+// 3. Recalcul automatique des totaux lors d'un changement de projet
+watch(() => props.projectId, () => {
+  chargerDonnees()
 })
 
 onMounted(() => {

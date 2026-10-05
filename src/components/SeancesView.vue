@@ -158,8 +158,16 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { db } from '../db.js'
+
+// 1. Déclaration de la prop projectId transmise par le composant parent
+const props = defineProps({
+  projectId: {
+    type: [Number, String],
+    required: true
+  }
+})
 
 const patients = ref([])
 const seances = ref([])
@@ -190,9 +198,13 @@ const filtresTemporels = [
   { id: 'trimestre4', label: 'Trimestre 4' }
 ]
 
+// 2. Chargement des données filtrées selon le projet actif
 const chargerDonnees = async () => {
-  patients.value = await db.patients.toArray()
-  seances.value = await db.seances.toArray()
+  const tousLesPatients = await db.patients.toArray()
+  const toutesLesSeances = await db.seances.toArray()
+
+  patients.value = tousLesPatients.filter(p => p.projectId === props.projectId)
+  seances.value = toutesLesSeances.filter(s => s.projectId === props.projectId)
 }
 
 const formerNomPatient = (p) => {
@@ -358,8 +370,10 @@ const confirmerModification = async () => {
   await sauvegarder()
 }
 
+// 3. Rattachement explicite au projectId lors de l'enregistrement
 const sauvegarder = async () => {
   const payload = {
+    projectId: props.projectId,
     patientId: form.patientId ? Number(form.patientId) : null,
     date: form.date,
     montant: Number(form.montant),
@@ -387,6 +401,15 @@ const confirmerSuppression = async () => {
     await chargerDonnees()
   }
 }
+
+// 4. Watcher pour réinitialiser l'état et recharger les données lors du changement de projet
+watch(() => props.projectId, () => {
+  afficherModal.value = false
+  afficherConfirmationModification.value = false
+  seanceEnEdition.value = null
+  seanceASupprimer.value = null
+  chargerDonnees()
+})
 
 onMounted(() => {
   chargerDonnees()
