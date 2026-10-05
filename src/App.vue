@@ -46,19 +46,6 @@ const sectionActuelle = computed(() => {
 const changerTab = (id) => {
   currentTab.value = id
 }
-
-// Fonction pour basculer en plein écran natif du navigateur
-const togglePleinEcran = () => {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen().catch(err => {
-      console.error("Erreur passage plein écran:", err)
-    })
-  } else {
-    if (document.exitFullscreen) {
-      document.exitFullscreen()
-    }
-  }
-}
 </script>
 
 <template>
@@ -71,14 +58,13 @@ const togglePleinEcran = () => {
     <aside class="sidebar">
       <div class="sidebar-header">
         <h2 v-if="!sidebarReduite">AppliDodo</h2>
-          <div class="sidebar-actions">
-            <button @click="sidebarReduite = !sidebarReduite" class="btn-icon" :title="sidebarReduite ? 'Agrandir le menu' : 'Rétracter le menu'">
-              {{ sidebarReduite ? '▶' : '◀' }}
-            </button>
-            <button @click="afficherPreferences = true" class="btn-icon" title="Préférences">
-              ⚙️
-            </button>
-          </div>
+        <div class="sidebar-actions">
+          <button @click="sidebarReduite = !sidebarReduite" class="btn-icon" :title="sidebarReduite ? 'Agrandir le menu' : 'Rétracter le menu'">
+            {{ sidebarReduite ? '▶' : '◀' }}
+          </button>
+          <button @click="afficherPreferences = true" class="btn-icon" title="Préférences">
+            ⚙️
+          </button>
         </div>
       </div>
       <nav class="sidebar-nav">
@@ -310,15 +296,7 @@ html, body, #app {
   flex: 1;
   padding: 24px;
   overflow-y: auto;
-  overflow-x: auto; /* 👈 Permet de glisser horizontalement si un tableau est trop large sur iPad */
-}
-
-.card {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  border: 1px solid #e2e8f0;
+  overflow-x: auto;
 }
 
 /* Modals */
