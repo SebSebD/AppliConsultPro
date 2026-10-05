@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import LockScreen from './components/LockScreen.vue'
 import AccueilView from './components/AccueilView.vue'
 import PatientsView from './components/PatientsView.vue'
@@ -8,84 +8,19 @@ import SeancesView from './components/SeancesView.vue'
 import FacturesView from './components/FacturesView.vue'
 import UrssafView from './components/UrssafView.vue'
 
-// État d'authentification (Corrigé avec localStorage pour la persistance)
+// --- État d'authentification ---
 const isAuthenticated = ref(false)
-
-onMounted(() => {
-  const auth = localStorage.getItem('app_authenticated')
-  if (auth === 'true') {
-    isAuthenticated.value = true
-  }
-  
-  // Chargement des projets
-  const savedList = localStorage.getItem('app_projects_list')
-  if (savedList) {
-    projectsList.value = JSON.parse(savedList)
-  }
-
-  const savedCurrent = localStorage.getItem('app_current_project')
-  if (savedCurrent && projectsList.value.includes(savedCurrent)) {
-    currentProject.value = savedCurrent
-  } else if (projectsList.value.length > 0) {
-    currentProject.value = projectsList.value[0]
-  }
-})
 
 const handleAuthenticated = () => {
   isAuthenticated.value = true
   localStorage.setItem('app_authenticated', 'true')
 }
 
+// --- État global de l'interface ---
 const currentTab = ref('accueil')
 const afficherPreferences = ref(false)
 const intervalleSauvegarde = ref(5)
-
-// État pour rétracter la barre latérale
-const sidebarReduite = ref(false)
-
-// Gestion des Projets Dynamiques
-const currentProject = ref('Année 2026')
-const projectsList = ref(['Année 2026'])
-const showProjectModal = ref(false)
-const newProjectName = ref('')
-
-const switchProject = (projectName) => {
-  currentProject.value = projectName
-  localStorage.setItem('app_current_project', projectName)
-}
-
-const createProject = () => {
-  const name = newProjectName.value.trim()
-  if (name && !projectsList.value.includes(name)) {
-    projectsList.value.push(name)
-    localStorage.setItem('app_projects_list', JSON.stringify(projectsList.value))
-    switchProject(name)
-    newProjectName.value = ''
-    showProjectModal.value = false
-  }
-}
-
-const renameCurrentProject = () => {
-  const newName = prompt("Nouveau nom pour ce projet :", currentProject.value)
-  if (newName && newName.trim() && !projectsList.value.includes(newName.trim())) {
-    const oldName = currentProject.value
-    const trimmedNewName = newName.trim()
-
-    // Migration des données associées dans le localStorage s'il y en a
-    const oldData = localStorage.getItem(`project_${oldName}_data`)
-    if (oldData) {
-      localStorage.setItem(`project_${trimmedNewName}_data`, oldData)
-      localStorage.removeItem(`project_${oldName}_data`)
-    }
-
-    const index = projectsList.value.indexOf(oldName)
-    if (index !== -1) {
-      projectsList.value[index] = trimmedNewName
-    }
-    localStorage.setItem('app_projects_list', JSON.stringify(projectsList.value))
-    switchProject(trimmedNewName)
-  }
-}
+const sidebarReduite = ref(false) // État pour rétracter la barre latérale
 
 const sections = [
   { id: 'accueil', nom: 'Accueil', couleur: '#3b82f6', description: "Vue d'ensemble et accès rapide" },
@@ -104,7 +39,101 @@ const changerTab = (id) => {
   currentTab.value = id
 }
 
-// Gestion du Swipe / Glissement tactile sur la sidebar
+// --- Gestion des Projets avec Persistance (localStorage) ---
+const projects = ref([])
+const activeProjectId = ref(null)
+const showProjectModal = ref(false)
+const newProjectName = ref('')
+
+// Computed pour récupérer facilement le nom du projet actif
+const currentProjectName = computed(() => {
+  const activeProject = projects.value.find(p => p.id === activeProjectId.value)
+  return activeProject ? activeProject.name : ''
+})
+
+// Initialisation au montage du composant
+onMounted(() => {
+  // Vérification de l'auth
+  const auth = localStorage.getItem('app_authenticated')
+  if (auth === 'true') {
+    isAuthenticated.value = true
+  }
+  
+  // Chargement des projets
+  const savedProjects = localStorage.getItem('appli_projects')
+  const savedActiveId = localStorage.getItem('appli_active_project_id')
+
+  if (savedProjects) {
+    projects.value = JSON.parse(savedProjects)
+  } else {
+    // Projet par défaut si rien n'existe
+    projects.value = [{ id: Date.now(), name: 'Année 2026' }]
+  }
+
+  // Chargement de l'ID du projet actif
+  if (savedActiveId && projects.value.some(p => p.id === parseInt(savedActiveId))) {
+    activeProjectId.value = parseInt(savedActiveId)
+  } else if (projects.value.length > 0) {
+    activeProjectId.value = projects.value[0].id
+  }
+})
+
+// Sauvegarde automatique à chaque modification de la liste ou du projet actif
+watch(projects, (newVal) => {
+  localStorage.setItem('appli_projects', JSON.stringify(newVal))
+}, { deep: true })
+
+watch(activeProjectId, (newVal) => {
+  if (newVal) {
+    localStorage.setItem('appli_active_project_id', newVal.toString())
+  }
+})
+
+// Actions sur les projets
+const selectProject = (id) => {
+  activeProjectId.value = id
+}
+
+const createProject = () => {
+  const name = newProjectName.value.trim()
+  if (name) {
+    const newId = Date.now()
+    projects.value.push({ id: newId, name: name })
+    selectProject(newId)
+    newProjectName.value = ''
+    showProjectModal.value = false
+  }
+}
+
+const removeProject = (id, event) => {
+  if (event) event.stopPropagation()
+  if (projects.value.length === 1) {
+    alert("Vous devez conserver au moins un projet.")
+    return
+  }
+  
+  const confirmDelete = confirm("Voulez-vous vraiment supprimer ce projet ?")
+  if (confirmDelete) {
+    projects.value = projects.value.filter(p => p.id !== id)
+    // Si le projet supprimé était l'actif, on bascule sur le premier dispo
+    if (activeProjectId.value === id) {
+      activeProjectId.value = projects.value[0].id
+    }
+  }
+}
+
+const renameCurrentProject = () => {
+  const activeProject = projects.value.find(p => p.id === activeProjectId.value)
+  if (!activeProject) return
+
+  const newName = prompt("Nouveau nom pour ce projet :", activeProject.name)
+  if (newName && newName.trim()) {
+    activeProject.name = newName.trim()
+  }
+}
+
+
+// --- Gestion du Swipe / Glissement tactile sur la sidebar ---
 let touchStartX = 0
 let touchEndX = 0
 
@@ -144,9 +173,9 @@ const gererSwipe = () => {
       @touchend="handleTouchEnd"
     >
       <div class="sidebar-header">
-        <!-- Remplacement de "AppliDodo" par le nom du projet -->
+        <!-- Nom du projet affiché dans la sidebar (cliquable pour changer) -->
         <h2 v-if="!sidebarReduite" class="sidebar-project-title" @click="showProjectModal = true" title="Gérer les projets">
-          📂 {{ currentProject }}
+          📂 {{ currentProjectName }}
         </h2>
         <div class="sidebar-actions">
           <button @click="sidebarReduite = !sidebarReduite" class="btn-icon" :title="sidebarReduite ? 'Agrandir le menu' : 'Rétracter le menu'">
@@ -162,7 +191,7 @@ const gererSwipe = () => {
           v-for="section in sections" 
           :key="section.id" 
           :class="['nav-btn', { active: currentTab === section.id }]"
-          @click="currentTab = section.id"
+          @click="changerTab(section.id)"
           :title="section.nom"
         >
           <span class="nav-icon-dot" :style="{ backgroundColor: section.couleur }"></span>
@@ -190,7 +219,7 @@ const gererSwipe = () => {
         <div class="top-bar-center">
           <div class="project-display-badge" @click="showProjectModal = true" title="Changer ou gérer les projets">
             <span class="project-badge-icon">📂</span>
-            <span class="project-badge-name">{{ currentProject }}</span>
+            <span class="project-badge-name">{{ currentProjectName }}</span>
           </div>
           <button @click="renameCurrentProject" class="btn-icon-small" title="Renommer ce projet">✏️</button>
         </div>
@@ -221,19 +250,30 @@ const gererSwipe = () => {
         <div class="preferences-body">
           <div class="pref-group">
             <label>Projet actif actuel :</label>
-            <p class="active-project-highlight"><strong>{{ currentProject }}</strong></p>
+            <p class="active-project-highlight"><strong>{{ currentProjectName }}</strong></p>
           </div>
 
           <div class="pref-group">
             <label>Basculer vers un autre projet :</label>
             <div class="projects-list-container">
               <button 
-                v-for="proj in projectsList" 
-                :key="proj"
-                @click="switchProject(proj); showProjectModal = false"
-                :class="['project-choice-btn', { active: proj === currentProject }]"
+                v-for="proj in projects" 
+                :key="proj.id"
+                @click="selectProject(proj.id); showProjectModal = false"
+                :class="['project-choice-btn', { active: proj.id === activeProjectId }]"
               >
-                {{ proj }} <span v-if="proj === currentProject" class="active-tag">(Actif)</span>
+                <span>{{ proj.name }}</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span v-if="proj.id === activeProjectId" class="active-tag">(Actif)</span>
+                  <span 
+                    v-if="projects.length > 1" 
+                    @click="(e) => removeProject(proj.id, e)" 
+                    style="color: #ef4444; font-size: 18px; cursor: pointer; padding: 0 4px;"
+                    title="Supprimer ce projet"
+                  >
+                    ×
+                  </span>
+                </div>
               </button>
             </div>
           </div>
