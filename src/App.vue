@@ -12,7 +12,7 @@ import UrssafView from './components/UrssafView.vue'
 const isAuthenticated = ref(false)
 
 onMounted(() => {
-  const auth = sessionStorage.getItem('app_authenticated')
+  const auth = localStorage.getItem('app_authenticated')
   if (auth === 'true') {
     isAuthenticated.value = true
   }

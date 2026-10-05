@@ -11,6 +11,8 @@ const CORRECT_PASSWORD = 'dodo'
 const handleLogin = () => {
   if (password.value === CORRECT_PASSWORD) {
     error.value = false
+    // On enregistre de façon persistante dans le navigateur
+    localStorage.setItem('app_authenticated', 'true')
     // On prévient le composant parent que l'accès est autorisé
     emit('authenticated')
   } else {
