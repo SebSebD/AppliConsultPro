@@ -8,7 +8,7 @@ import SeancesView from './components/SeancesView.vue'
 import FacturesView from './components/FacturesView.vue'
 import UrssafView from './components/UrssafView.vue'
 
-// --- État d'authentification ---
+// --- État d'authentification --- coucou 
 const isAuthenticated = ref(false)
 
 const handleAuthenticated = () => {
