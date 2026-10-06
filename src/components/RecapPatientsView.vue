@@ -1,6 +1,6 @@
 <template>
   <div class="recap-container">
-    <!-- 1. BANDES DE FILTRES FINANCIERS -->
+    <!-- 1. FILTRES FINANCIERS -->
     <div class="filters-bar">
       <button 
         v-for="f in filtres" 
@@ -43,7 +43,7 @@
       </div>
     </div>
 
-    <!-- 3. PIED DE PAGE : STATISTIQUES -->
+    <!-- 3. STATISTIQUES PIED DE PAGE -->
     <footer class="stats-footer">
       <div class="stat-item">Nombre de patients : <strong>{{ patientsFiltres.length }}</strong></div>
       <div class="stat-spacer"></div>
@@ -55,7 +55,7 @@
       </div>
     </footer>
 
-    <!-- MODAL : FEUILLE DÉTAIL SÉANCES PATIENT -->
+    <!-- MODAL : DÉTAIL DU PATIENT -->
     <div v-if="patientDetail" class="modal-backdrop">
       <div class="modal-box modal-large">
         <header class="modal-header">
@@ -64,12 +64,12 @@
         </header>
 
         <div class="modal-content-scroll">
-          <!-- 1. Informations Générales -->
+          <!-- Informations Générales -->
           <section class="detail-section">
             <h4>Informations Générales</h4>
             <div class="info-grid">
               <div class="info-box">
-                <span class="info-label">Tarif convenu par séance</span>
+                <span class="info-label">Tarif de base convenu</span>
                 <span class="info-value">{{ Number(patientDetail.tarifParDefaut ?? 60).toFixed(2) }} €</span>
               </div>
               <div class="info-box">
@@ -81,7 +81,7 @@
             </div>
           </section>
 
-          <!-- 2. Situation Financière -->
+          <!-- Situation Financière -->
           <section class="detail-section">
             <h4>Situation Financière</h4>
             <div class="financial-row">
@@ -92,44 +92,73 @@
             </div>
           </section>
 
-          <!-- 3. Bilan par Trimestre -->
+          <!-- Bilan par Trimestre -->
           <section class="detail-section">
             <h4>Bilan par Trimestre</h4>
             <div class="trimestre-list">
               <div v-for="t in bilanTrimestres" :key="t.label" class="trimestre-row">
                 <span class="trimestre-label">{{ t.label }}</span>
                 <span class="trimestre-count">{{ t.count }} séance(s)</span>
-                <strong class="trimestre-total">{{ t.totalPaye.toFixed(2) }} €</strong>
+                <span class="trimestre-du">Dû : {{ t.totalDu.toFixed(2) }} €</span>
+                <strong class="trimestre-total">Encaissements : {{ t.totalPaye.toFixed(2) }} €</strong>
               </div>
             </div>
           </section>
 
-          <!-- 4. Historique Détaillé -->
+          <!-- Historique Détaillé des Séances -->
           <section class="detail-section">
             <h4>Historique détaillé des séances</h4>
+            
             <div v-if="seancesPatientDetail.length === 0" class="empty-history">
               Aucune séance enregistrée pour ce patient.
             </div>
-            <div v-else class="history-list">
-              <div v-for="s in seancesPatientDetail" :key="s.id" class="history-row">
-                <div class="history-left">
-                  <span class="history-date">{{ formerDate(s.date) }}</span>
-                  <span class="history-trimestre">{{ s.chaineTrimestre }}</span>
-                </div>
-                <div class="history-right">
-                  <span class="history-montant">{{ Number(s.montant).toFixed(2) }} €</span>
-                  <span class="history-pay">{{ s.moyenPaiement || 'CB' }}</span>
+
+            <div v-else class="history-table">
+              <!-- En-tête / Légende requise -->
+              <div class="history-header">
+                <span class="col-header date-col">Date de la séance</span>
+                <span class="col-header tarif-col">Tarif de la séance</span>
+                <span class="col-header paye-col">Montant payé</span>
+              </div>
+
+              <!-- Liste des séances -->
+              <div class="history-list">
+                <div v-for="s in seancesPatientDetail" :key="s.id" class="history-row">
+                  <!-- Col 1 : Date & Trimestre -->
+                  <div class="history-col date-col">
+                    <span class="history-date">{{ formerDate(s.date) }}</span>
+                    <span class="history-trimestre">{{ s.chaineTrimestre }}</span>
+                  </div>
+
+                  <!-- Col 2 : Tarif de la séance (Editable) -->
+                  <div class="history-col tarif-col">
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      :value="s.tarifEffectif"
+                      @change="e => modifierTarifSeance(s.id, e.target.value)"
+                      class="input-tarif"
+                      title="Modifier le tarif pour cette séance"
+                    />
+                    <span class="currency-symbol">€</span>
+                  </div>
+
+                  <!-- Col 3 : Montant Payé & Mode de Paiement -->
+                  <div class="history-col paye-col">
+                    <span class="history-montant">{{ Number(s.montant || 0).toFixed(2) }} €</span>
+                    <span class="history-pay">{{ s.moyenPaiement || 'CB' }}</span>
+                  </div>
                 </div>
               </div>
             </div>
           </section>
         </div>
 
-        <!-- Toolbar Bottom Bar -->
+        <!-- Pied du modal -->
         <footer class="modal-footer">
           <button @click="fermerDetailPatient" class="btn-cancel">Fermer</button>
           <div class="modal-footer-total">
-            Total des montants réglés :
+            Total des encaissement :
             <strong class="total-paye-blue">{{ totalPayePatientDetail.toFixed(2) }} €</strong>
           </div>
         </footer>
@@ -142,7 +171,6 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { db } from '../db.js'
 
-// 1. Déclaration de la prop projectId transmise depuis le composant parent
 const props = defineProps({
   projectId: {
     type: [Number, String],
@@ -164,13 +192,17 @@ const filtres = [
   { id: 'aJour', label: 'À jour' }
 ]
 
-// 2. Chargement des données filtrées par projectId
 const chargerDonnees = async () => {
   const tousLesPatients = await db.patients.toArray()
   const toutesLesSeances = await db.seances.toArray()
 
   patients.value = tousLesPatients.filter(p => p.projectId === props.projectId)
   seances.value = toutesLesSeances.filter(s => s.projectId === props.projectId)
+
+  if (patientDetail.value) {
+    const pAjour = patientsEnrichis.value.find(p => p.id === patientDetail.value.id)
+    if (pAjour) patientDetail.value = pAjour
+  }
 }
 
 const formerNomComplet = (p) => {
@@ -196,39 +228,43 @@ const calculerTrimestre = (dateStr) => {
   return 'Trimestre 4'
 }
 
-// Enrichissement des patients avec calcul du solde et statistiques
+// Enrichissement des patients avec calcul basé sur le tarif de chaque séance
 const patientsEnrichis = computed(() => {
   return patients.value.map(p => {
     const seancesP = seances.value.filter(s => s.patientId === p.id)
-    
-    // Solde
+    const tarifParDefaut = Number(p.tarifParDefaut ?? 60.0)
+
     const totalPaye = seancesP.reduce((sum, s) => sum + (Number(s.montant) || 0), 0)
-    const tarifRef = Number(p.tarifParDefaut ?? 60.0)
-    const totalDu = seancesP.length * tarifRef
+    
+    // Le total dû prend le tarif spécifique de la séance s'il existe, sinon le tarif par défaut
+    const totalDu = seancesP.reduce((sum, s) => {
+      const tarifSeance = (s.tarif !== undefined && s.tarif !== null && s.tarif !== '') 
+        ? Number(s.tarif) 
+        : tarifParDefaut
+      return sum + tarifSeance
+    }, 0)
+
     const solde = totalPaye - totalDu
 
-    // Texte & Couleur solde
     let texteSolde = '0,00 €'
     let texteSoldeDetail = '0,00 € (Équilibre)'
-    let couleurSolde = '#1e293b' // Primary
+    let couleurSolde = '#1e293b'
 
     if (solde > 0.001) {
       texteSolde = `${solde.toFixed(2)} € (avance)`
       texteSoldeDetail = `${solde.toFixed(2)} € (avance)`
-      couleurSolde = '#16a34a' // Green
+      couleurSolde = '#16a34a'
     } else if (solde < -0.001) {
       texteSolde = `${Math.abs(solde).toFixed(2)} € (due)`
       texteSoldeDetail = `${Math.abs(solde).toFixed(2)} € (due)`
-      couleurSolde = '#dc2626' // Red
+      couleurSolde = '#dc2626'
     }
 
-    // Séances année en cours
     const seancesAnneeCount = seancesP.filter(s => {
       if (!s.date) return false
       return new Date(s.date).getFullYear() === anneeCourante
     }).length
 
-    // Dernière séance (triée par date décroissante)
     const seancesTriees = [...seancesP].sort((a, b) => new Date(b.date) - new Date(a.date))
     const dateDerniereSeance = seancesTriees[0]?.date || null
 
@@ -246,7 +282,6 @@ const patientsEnrichis = computed(() => {
   })
 })
 
-// Filtrage
 const patientsFiltres = computed(() => {
   return patientsEnrichis.value.filter(p => {
     switch (filtreActuel.value) {
@@ -260,7 +295,6 @@ const patientsFiltres = computed(() => {
   })
 })
 
-// Total cumulé du solde
 const totalMontantFiltre = computed(() => {
   return patientsFiltres.value.reduce((sum, p) => sum + p.solde, 0)
 })
@@ -272,7 +306,7 @@ const couleurTotalFiltre = computed(() => {
   return '#1e293b'
 })
 
-// MODAL DÉTAILS PATIENT
+// MODAL DETAILS PATIENT
 const ouvrirDetailPatient = (p) => {
   patientDetail.value = p
 }
@@ -284,9 +318,12 @@ const fermerDetailPatient = () => {
 const seancesPatientDetail = computed(() => {
   if (!patientDetail.value) return []
   const seancesP = seances.value.filter(s => s.patientId === patientDetail.value.id)
+  const tarifParDefaut = Number(patientDetail.value.tarifParDefaut ?? 60.0)
+
   return seancesP.map(s => ({
     ...s,
-    chaineTrimestre: calculerTrimestre(s.date)
+    chaineTrimestre: calculerTrimestre(s.date),
+    tarifEffectif: (s.tarif !== undefined && s.tarif !== null && s.tarif !== '') ? Number(s.tarif) : tarifParDefaut
   })).sort((a, b) => new Date(b.date) - new Date(a.date))
 })
 
@@ -300,11 +337,21 @@ const bilanTrimestres = computed(() => {
     const sTrim = seancesPatientDetail.value.filter(s => s.chaineTrimestre === label)
     const count = sTrim.length
     const totalPaye = sTrim.reduce((sum, s) => sum + (Number(s.montant) || 0), 0)
-    return { label, count, totalPaye }
+    const totalDu = sTrim.reduce((sum, s) => sum + Number(s.tarifEffectif), 0)
+
+    return { label, count, totalDu, totalPaye }
   })
 })
 
-// 3. Réaction automatique au changement de projet actif
+// Modification à la volée du tarif d'une séance spécifique
+const modifierTarifSeance = async (seanceId, nouveauTarif) => {
+  const valNum = parseFloat(nouveauTarif)
+  if (isNaN(valNum)) return
+
+  await db.seances.update(seanceId, { tarif: valNum })
+  await chargerDonnees()
+}
+
 watch(() => props.projectId, () => {
   patientDetail.value = null
   chargerDonnees()
@@ -326,7 +373,6 @@ onMounted(() => {
   overflow: hidden;
 }
 
-/* Filters Bar */
 .filters-bar {
   display: flex;
   align-items: center;
@@ -354,7 +400,6 @@ onMounted(() => {
   font-weight: 700;
 }
 
-/* List Wrapper */
 .recap-list-wrapper {
   flex: 1;
   overflow-y: auto;
@@ -401,7 +446,6 @@ onMounted(() => {
   color: #64748b;
 }
 
-/* Footer Stats */
 .stats-footer {
   display: flex;
   align-items: center;
@@ -415,7 +459,6 @@ onMounted(() => {
 .stat-spacer { flex: 1; }
 .stat-total { font-size: 16px; }
 
-/* Empty state */
 .empty-state {
   padding: 40px;
   text-align: center;
@@ -423,7 +466,6 @@ onMounted(() => {
   font-size: 14px;
 }
 
-/* Modal Large */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -437,8 +479,8 @@ onMounted(() => {
 .modal-box.modal-large {
   background: white;
   border-radius: 12px;
-  max-width: 650px;
-  width: 90%;
+  max-width: 680px;
+  width: 92%;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
@@ -536,41 +578,60 @@ onMounted(() => {
   font-size: 13px;
 }
 
-.trimestre-count {
+.trimestre-count, .trimestre-du {
   color: #64748b;
 }
 
 .trimestre-total {
-  font-size: 14px;
+  font-size: 13px;
+  color: #0f172a;
 }
 
-.empty-history {
-  font-size: 13px;
-  color: #94a3b8;
-  font-style: italic;
+/* HISTORIQUE ET LÉGENDE DE SÉANCES */
+.history-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.col-header {
+  display: flex;
+  align-items: center;
+}
+
+.date-col { flex: 1.2; }
+.tarif-col { flex: 1; justify-content: center; text-align: center; }
+.paye-col { flex: 1; text-align: right; justify-content: flex-end; }
 
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .history-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   font-size: 13px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 8px 10px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
 }
 
-.history-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.history-left, .history-right {
+.history-col {
   display: flex;
   flex-direction: column;
 }
@@ -585,7 +646,34 @@ onMounted(() => {
   color: #64748b;
 }
 
-.history-right { text-align: right; }
+.tarif-col {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.input-tarif {
+  width: 65px;
+  padding: 4px 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  text-align: right;
+  font-weight: 600;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.currency-symbol {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.empty-history {
+  font-size: 13px;
+  color: #94a3b8;
+  font-style: italic;
+}
 
 .modal-footer {
   display: flex;
@@ -600,7 +688,6 @@ onMounted(() => {
   font-size: 14px;
   color: #334155;
 }
-
 .total-paye-blue {
   font-size: 16px;
   color: #2563eb;
@@ -614,4 +701,26 @@ onMounted(() => {
   border-radius: 6px;
   cursor: pointer;
 }
+
+/* Styles et masquage des flèches pour .input-tarif */
+.input-tarif {
+  -webkit-appearance: none;
+  appearance: none;
+  -moz-appearance: textfield; /* Firefox */
+  width: 65px;
+  padding: 4px 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  text-align: right;
+  font-weight: 600;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.input-tarif::-webkit-outer-spin-button,
+.input-tarif::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 </style>

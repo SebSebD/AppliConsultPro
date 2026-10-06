@@ -117,6 +117,11 @@
           </div>
 
           <div class="form-group">
+            <label>Tarif de la séance (€)</label>
+            <input v-model.number="form.tarif" type="number" step="0.5" required class="form-input" />
+          </div>
+
+          <div class="form-group">
             <label>Montant payé (€)</label>
             <input v-model.number="form.montant" type="number" step="0.5" required class="form-input" />
           </div>
@@ -186,6 +191,7 @@ const moyensPaiement = ['CB', 'Espèces', 'Chèque', 'Virement']
 const form = reactive({
   patientId: null,
   date: new Date().toISOString().slice(0, 10),
+  tarif: 60.0,
   montant: 60.0,
   moyenPaiement: 'CB'
 })
@@ -249,7 +255,9 @@ const seancesFiltrees = computed(() => {
 const seancesTriees = computed(() => {
   const enrichies = seancesFiltrees.value.map(s => {
     const patient = patients.value.find(p => p.id === s.patientId)
-    const tarifConvenu = Number(patient?.tarifParDefaut ?? 0.0)
+    // Récupère le tarif propre à la séance s'il existe (ex: modifié dans RecapPatient), 
+    // sinon bascule sur s.tarifConvenu ou le tarif par défaut du patient
+    const tarifConvenu = Number(s.tarif ?? s.tarifConvenu ?? patient?.tarifParDefaut ?? 0.0)
     const montantPaye = Number(s.montant ?? 0)
 
     let couleurVoyant = '#1e293b'
@@ -324,10 +332,12 @@ const formerDate = (dateStr) => {
 const ouvrirModalAjout = () => {
   seanceEnEdition.value = null
   const premierPatient = patients.value[0] || null
+  const tarifInitial = premierPatient ? Number(premierPatient.tarifParDefaut ?? 60.0) : 60.0
   Object.assign(form, {
     patientId: premierPatient ? premierPatient.id : null,
     date: new Date().toISOString().slice(0, 10),
-    montant: premierPatient ? Number(premierPatient.tarifParDefaut ?? 60.0) : 60.0,
+    tarif: tarifInitial,
+    montant: tarifInitial,
     moyenPaiement: 'CB'
   })
   afficherModal.value = true
@@ -337,16 +347,20 @@ const surChangementPatient = () => {
   if (!seanceEnEdition.value && form.patientId) {
     const patient = patients.value.find(p => p.id === form.patientId)
     if (patient) {
-      form.montant = Number(patient.tarifParDefaut ?? 60.0)
+      const pTarif = Number(patient.tarifParDefaut ?? 60.0)
+      form.tarif = pTarif
+      form.montant = pTarif
     }
   }
 }
 
 const ouvrirModalEditer = (seance) => {
   seanceEnEdition.value = seance
+  const patient = patients.value.find(p => p.id === seance.patientId)
   Object.assign(form, {
     patientId: seance.patientId || null,
     date: seance.date,
+    tarif: Number(seance.tarif ?? seance.tarifConvenu ?? patient?.tarifParDefaut ?? 60.0),
     montant: seance.montant,
     moyenPaiement: seance.moyenPaiement || 'CB'
   })
@@ -376,6 +390,7 @@ const sauvegarder = async () => {
     projectId: props.projectId,
     patientId: form.patientId ? Number(form.patientId) : null,
     date: form.date,
+    tarif: Number(form.tarif),
     montant: Number(form.montant),
     moyenPaiement: form.moyenPaiement
   }

@@ -182,7 +182,7 @@
                         ✉️ Écrire
                       </a>
                     </div>
-                    <p v-if="emailErreur" class="error-msg">⚠️ Adresse e-mail invalide</p>
+                    <p v-if="emailErreur" class="error-msg">⚠ Adresse e-mail invalide</p>
                   </div>
                 </div>
 
@@ -213,7 +213,7 @@
                 </div>
               </fieldset>
 
-              <!-- Section 4: Notes & Suivi (Clic sur le texte pour agrandir) -->
+              <!-- Section 4: Notes & Suivi (Clic sur la légende pour agrandir) -->
               <fieldset class="form-section">
                 <legend 
                   @click.stop="modeGrandesNotes = true" 
@@ -225,11 +225,11 @@
                 <textarea v-model="form.notes" placeholder="Notes de suivi..." rows="3" class="form-textarea"></textarea>
               </fieldset>
 
-              <!-- Section 5: Situation Financière -->
+              <!-- Section 5: Situation Financière (Identique à RecapPatients) -->
               <fieldset class="form-section financial-section">
                 <legend>Situation Financière</legend>
-                <div class="financial-summary-row">
-                  <span>Solde du patient :</span>
+                <div class="financial-row">
+                  <span>Différence (Payé - Dû) :</span>
                   <strong :style="{ color: couleurSoldeForm }">
                     {{ texteSoldeForm }}
                   </strong>
@@ -264,7 +264,6 @@
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { db } from '../db.js'
 
-// 1. Récupération de l'ID du projet actif
 const props = defineProps({
   projectId: {
     type: [Number, String],
@@ -278,10 +277,9 @@ const texteRecherche = ref('')
 const patientSelectionne = ref(null)
 const patientASupprimer = ref(null)
 
-// État d'affichage de la fenêtre agrandie des notes
 const modeGrandesNotes = ref(false)
 
-// --- DONNÉES POUR LES MENUS DÉROULANTS DE DATE DE NAISSANCE ---
+// Menus déroulants date de naissance
 const jourNaissance = ref('')
 const moisNaissance = ref('')
 const anneeNaissance = ref('')
@@ -320,7 +318,7 @@ const form = reactive({
 
 let verrouillageMaj = false
 
-// --- VALIDATION ET SYNCHRO DATE DE NAISSANCE ---
+// Validation date de naissance
 const dateErreur = computed(() => {
   if (!jourNaissance.value || !moisNaissance.value || !anneeNaissance.value) return false
   const j = parseInt(jourNaissance.value, 10)
@@ -339,13 +337,13 @@ watch([jourNaissance, moisNaissance, anneeNaissance], () => {
   }
 })
 
-// --- GESTION DU TARIF PAR PAS DE 10 ---
+// Ajustement tarif (+10 / -10)
 const ajusterTarif = (delta) => {
   const val = Number(form.tarifParDefaut) || 0
   form.tarifParDefaut = Math.max(0, val + delta)
 }
 
-// --- FORMATAGE ET VALIDATION DU TÉLÉPHONE ---
+// Téléphone
 const formatTelephone = (event) => {
   let raw = event.target.value.replace(/[^\d+]/g, '')
   if (raw.startsWith('+33')) {
@@ -374,23 +372,33 @@ const telCleanUrl = computed(() => {
   return 'tel:' + form.telephone.replace(/\s/g, '')
 })
 
-// --- VALIDATION EMAIL ---
+// Validation email
 const emailErreur = computed(() => {
   if (!form.email) return false
   const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   return !regex.test(form.email)
 })
 
-// --- CALCUL DU SOLDE ---
+// --- CALCUL DU SOLDE IDENTIQUE À RECAPPATIENTS ---
 const calculerSoldePatient = (patientId, tarifParDefaut) => {
   const seancesPatient = seances.value.filter(s => String(s.patientId) === String(patientId))
-  const totalPaye = seancesPatient.reduce((acc, s) => acc + (Number(s.montant) || 0), 0)
-  const tarif = Number(tarifParDefaut ?? 60.0)
-  const totalDu = seancesPatient.length * tarif
+
+  // Total dû : prend le tarif spécifique de la séance s'il existe, sinon le tarif par défaut
+  const totalDu = seancesPatient.reduce((acc, s) => {
+    const tarifSeance = s.tarif ?? s.prix ?? s.montantDu ?? tarifParDefaut ?? 60.0
+    return acc + (Number(tarifSeance) || 0)
+  }, 0)
+
+  // Total payé : somme des montants réglés
+  const totalPaye = seancesPatient.reduce((acc, s) => {
+    const paye = s.montantPaye ?? s.paye ?? (s.tarif !== undefined ? s.montant : s.montant) ?? 0
+    return acc + (Number(paye) || 0)
+  }, 0)
+
   return totalPaye - totalDu
 }
 
-// 2. Chargement des données filtrées selon le projet actif
+// Chargement des données
 const chargerDonnees = async () => {
   const tousLesPatients = await db.patients.toArray()
   const toutesLesSeances = await db.seances.toArray()
@@ -471,7 +479,7 @@ const fermerDetail = () => {
   modeGrandesNotes.value = false
 }
 
-// Enregistrement réactif automatique
+// Mise à jour automatique en base de données
 watch(form, async (nouveauForm) => {
   if (verrouillageMaj || !nouveauForm.id) return
 
@@ -498,7 +506,6 @@ watch(form, async (nouveauForm) => {
   }
 }, { deep: true })
 
-// 3. Création d'un nouveau patient
 const ajouterPatient = async () => {
   const count = patients.value.length
   const newId = await db.patients.add({
@@ -535,25 +542,24 @@ const confirmerSuppression = async () => {
   await chargerDonnees()
 }
 
-const seancesPatientForm = computed(() => {
-  if (!form.id) return []
-  return seances.value.filter(s => String(s.patientId) === String(form.id))
-})
-
+// --- CALCUL DE L'AFFICHAGE FINANCIER DANS LE FORMULAIRE ---
 const soldeForm = computed(() => {
   return calculerSoldePatient(form.id, form.tarifParDefaut)
 })
 
 const couleurSoldeForm = computed(() => calculerCouleurSolde(soldeForm.value))
 
+const formaterMontant = (valeur) => {
+  return valeur.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
+}
+
 const texteSoldeForm = computed(() => {
   const s = soldeForm.value
-  if (s > 0.001) return `${s.toFixed(2)} € (avance)`
-  if (s < -0.001) return `${Math.abs(s).toFixed(2)} € (dû)`
+  if (s > 0.001) return `${formaterMontant(s)} (avance)`
+  if (s < -0.001) return `${formaterMontant(Math.abs(s))} (dû)`
   return '0,00 € (Équilibre)'
 })
 
-// 4. Rechargement si le projet change
 watch(() => props.projectId, () => {
   fermerDetail()
   chargerDonnees()
@@ -687,7 +693,7 @@ onMounted(() => {
   font-size: 15px;
 }
 
-/* --- MODALE FLOTTANTE --- */
+/* Modal */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -712,7 +718,6 @@ onMounted(() => {
   transition: max-width 0.2s ease, height 0.2s ease;
 }
 
-/* Modale agrandie pour les grandes notes */
 .patient-modal-box.modal-expanded {
   max-width: 850px;
   height: 80vh;
@@ -779,7 +784,6 @@ onMounted(() => {
   gap: 14px;
 }
 
-/* Corps agrandi pour le mode Notes */
 .modal-body-expanded {
   padding: 20px;
   flex: 1;
@@ -819,34 +823,22 @@ onMounted(() => {
   background: #fafafa;
 }
 
-/* Légende cliquable */
 .legend-clickable {
   cursor: pointer;
   user-select: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: color 0.15s, transform 0.1s; /* Ajout de la transition de transformation */
+  transition: color 0.15s, transform 0.1s;
 }
 
 .legend-clickable:hover {
   color: #2563eb;
-  text-decoration: underline; /* Indique encore plus clairement le lien cliquable */
+  text-decoration: underline;
 }
 
-/* Effet "pression" au clic */
 .legend-clickable:active {
   transform: scale(0.97);
-}
-
-.expand-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: #2563eb;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  padding: 2px 6px;
-  border-radius: 4px;
 }
 
 .form-row {
@@ -880,7 +872,6 @@ onMounted(() => {
   border-color: #2563eb;
 }
 
-/* --- SÉLECTEURS DE DATE (Naissance) --- */
 .date-selects-container {
   flex: 1;
   display: flex;
@@ -893,14 +884,12 @@ onMounted(() => {
   gap: 8px;
   width: 100%;
 }
-
 .select-field {
   flex: 1;
   padding: 8px 6px;
   cursor: pointer;
 }
 
-/* --- STEPPER DU TARIF --- */
 .montant-input-wrapper {
   position: relative;
   display: flex;
@@ -913,6 +902,8 @@ onMounted(() => {
   width: 100%;
   padding-right: 28px;
   text-align: right;
+  -webkit-appearance: none;
+  appearance: none;
   -moz-appearance: textfield;
 }
 
@@ -951,7 +942,6 @@ onMounted(() => {
   color: #0f172a;
 }
 
-/* --- BOUTONS D'ACTION (E-MAIL ET APPEL) --- */
 .input-with-action-container {
   flex: 1;
   display: flex;
@@ -998,7 +988,6 @@ onMounted(() => {
   background-color: #bbf7d0;
 }
 
-/* --- GESTION DES ERREURS --- */
 .input-error {
   border-color: #ef4444 !important;
   background-color: #fef2f2;
@@ -1026,6 +1015,7 @@ onMounted(() => {
   border-color: #2563eb;
 }
 
+/* SECTION FINANCIÈRE SIMPLIFIÉE */
 .financial-section {
   background: #f0fdf4;
   border-color: #bbf7d0;
@@ -1036,12 +1026,13 @@ onMounted(() => {
   color: #166534;
 }
 
-.financial-summary-row {
+.financial-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 14px;
+  color: #334155;
+  font-weight: 500;
 }
 
 .modal-footer {
@@ -1067,7 +1058,7 @@ onMounted(() => {
   background-color: #1d4ed8;
 }
 
-/* Modale de suppression */
+/* Delete Modal */
 .modal-box-delete {
   background: white;
   padding: 24px;
