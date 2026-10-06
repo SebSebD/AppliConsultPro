@@ -1,9 +1,20 @@
 <template>
   <div class="accueil-container">
-    <!-- Message de sauvegarde (le texte complet est fourni directement par la prop) -->
-    <p v-if="dateDerniereSauvegarde" class="sauvegarde-info">
-      {{ dateDerniereSauvegarde }}
-    </p>
+    <!-- Barre supérieure : Message de sauvegarde + Bouton Forcer la mise à jour -->
+    <div class="sauvegarde-bar">
+      <p v-if="dateDerniereSauvegarde" class="sauvegarde-info">
+        {{ dateDerniereSauvegarde }}
+      </p>
+
+      <button 
+        type="button" 
+        class="btn-refresh" 
+        @click="forcerMiseAJour"
+        title="Vider le cache et forcer la mise à jour de l'application"
+      >
+        🔄 Forcer la mise à jour
+      </button>
+    </div>
 
     <!-- Grille des modules -->
     <div class="modules-grid">
@@ -35,14 +46,37 @@ const props = defineProps({
     type: [Number, String],
     required: true
   },
-  // Reçoit la date de sauvegarde transmise par le composant parent
   dateDerniereSauvegarde: {
     type: String,
     default: ''
   }
-})
+}) // <-- C'EST CETTE FERMETURE QUI MANQUAIT CHEZ VOUS
 
 const emit = defineEmits(['naviguer'])
+
+const forcerMiseAJour = async () => {
+  try {
+    // 1. Désinstaller tous les Service Workers
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      for (const registration of registrations) {
+        await registration.unregister()
+      }
+    }
+
+    // 2. Vider les caches de l'application
+    if ('caches' in window) {
+      const cacheNames = await caches.keys()
+      await Promise.all(cacheNames.map(name => caches.delete(name)))
+    }
+
+    // 3. Forcer le rechargement de la page
+    window.location.reload(true)
+  } catch (e) {
+    console.error('Erreur lors du nettoyage :', e)
+    window.location.reload()
+  }
+}
 
 const sectionsModules = [
   { id: 'patients', nom: 'Patients', icone: '👥', couleur: '#1fcfc6', description: 'Gestion du répertoire patientèle' },
@@ -146,5 +180,47 @@ const sectionsModules = [
   font-size: 13px;
   color: #64748b;
   line-height: 1.4;
+}
+
+.sauvegarde-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+/* On ajuste sauvegarde-info pour qu'il prenne moins de marge verticale */
+.sauvegarde-info {
+  font-size: 13px;
+  color: #64748b;
+  padding: 8px 14px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 0;
+}
+
+/* Style du bouton de rafraîchissement */
+.btn-refresh {
+  background-color: white;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-refresh:hover {
+  background-color: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
 }
 </style>
