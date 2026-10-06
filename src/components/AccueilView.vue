@@ -1,11 +1,9 @@
 <template>
   <div class="accueil-container">
-    <header class="accueil-header">
-      <p class="status-badge">
-        <span class="status-dot green"></span>
-        Système à jour
-      </p>
-    </header>
+    <!-- Message de sauvegarde (le texte complet est fourni directement par la prop) -->
+    <p v-if="dateDerniereSauvegarde" class="sauvegarde-info">
+      {{ dateDerniereSauvegarde }}
+    </p>
 
     <!-- Grille des modules -->
     <div class="modules-grid">
@@ -36,23 +34,40 @@ const props = defineProps({
   projectId: {
     type: [Number, String],
     required: true
+  },
+  // Reçoit la date de sauvegarde transmise par le composant parent
+  dateDerniereSauvegarde: {
+    type: String,
+    default: ''
   }
 })
 
 const emit = defineEmits(['naviguer'])
 
 const sectionsModules = [
-  { id: 'patients', nom: 'Patients', icone: '👥', couleur: '#6366f1', description: 'Gestion du répertoire patientèle' },
-  { id: 'recapPatients', nom: 'Récap Patients', icone: '📊', couleur: '#14b8a6', description: 'Synthèse et statistiques par patient' },
-  { id: 'seances', nom: 'Séances', icone: '📅', couleur: '#0d9488', description: 'Journal des rendez-vous et règlements' },
-  { id: 'factures', nom: 'Factures', icone: '📄', couleur: '#f97316', description: 'Moteur de facturation' },
-  { id: 'urssaf', nom: 'URSSAF', icone: '📈', couleur: '#22c55e', description: 'Calcul des cotisations par trimestre' }
+  { id: 'patients', nom: 'Patients', icone: '👥', couleur: '#1fcfc6', description: 'Gestion du répertoire patientèle' },
+  { id: 'recapPatients', nom: 'Récap Patients', icone: '📊', couleur: '#1f91cf', description: 'Synthèse et statistiques par patient' },
+  { id: 'seances', nom: 'Séances', icone: '📅', couleur: '#f2cc0f', description: 'Journal des rendez-vous et règlements' },
+  { id: 'factures', nom: 'Factures', icone: '📄', couleur: '#f27d0f', description: 'Moteur de facturation' },
+  { id: 'urssaf', nom: 'URSSAF', icone: '📈', couleur: '#34f20f', description: 'Calcul des cotisations par trimestre' }
 ]
 </script>
 
 <style scoped>
 .accueil-container {
   padding: 10px;
+}
+
+/* Style discret pour le message de sauvegarde au-dessus de la grille */
+.sauvegarde-info {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 16px;
+  padding: 8px 14px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: inline-block;
 }
 
 .accueil-header {

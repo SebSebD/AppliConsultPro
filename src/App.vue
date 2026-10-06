@@ -18,17 +18,17 @@ const handleAuthenticated = () => {
 
 // --- État global de l'interface ---
 const currentTab = ref('accueil')
-const afficherPreferences = ref(false) // Pour la roue crantée (système)
-const intervalleSauvegarde = ref(5)
+const afficherPreferences = ref(false)
 const sidebarReduite = ref(false)
+const appKey = ref(0) // Utilisé pour forcer le rechargement des composants après restauration
 
 const sections = [
-  { id: 'accueil', nom: 'Accueil', couleur: '#3b82f6', description: "Vue d'ensemble et accès rapide" },
-  { id: 'patients', nom: 'Patients', couleur: '#6366f1', description: 'Gestion du répertoire patientèle' },
-  { id: 'recapPatients', nom: 'Récap Patients', couleur: '#14b8a6', description: 'Synthèse et statistiques par patient' },
-  { id: 'seances', nom: 'Séances', couleur: '#0d9488', description: 'Journal des rendez-vous et règlements' },
-  { id: 'factures', nom: 'Factures', couleur: '#f97316', description: 'Moteur de facturation' },
-  { id: 'urssaf', nom: 'URSSAF', couleur: '#22c55e', description: 'Calcul des cotisations par trimestre' }
+  { id: 'accueil', nom: 'Accueil', couleur: '#000000', description: "Vue d'ensemble et accès rapide" },
+  { id: 'patients', nom: 'Patients', couleur: '#1fcfc6', description: 'Gestion du répertoire patientèle' },
+  { id: 'recapPatients', nom: 'Récap Patients', couleur: '#1f91cf', description: 'Synthèse et statistiques par patient' },
+  { id: 'seances', nom: 'Séances', couleur: '#f2cc0f', description: 'Journal des rendez-vous et règlements' },
+  { id: 'factures', nom: 'Factures', couleur: '#f27d0f', description: 'Moteur de facturation' },
+  { id: 'urssaf', nom: 'URSSAF', couleur: '#34f20f', description: 'Calcul des cotisations par trimestre' }
 ]
 
 const sectionActuelle = computed(() => {
@@ -39,13 +39,21 @@ const changerTab = (id) => {
   currentTab.value = id
 }
 
-// --- GESTION DES PROJETS ---
+// --- GESTION DES PROJETS ET SAUVEGARDES ---
 const projects = ref([])
 const activeProjectId = ref(null)
 const showProjectModal = ref(false)
-const showProjectListDropdown = ref(false) // Pour le menu déroulant "Liste des projets"
+const showProjectListDropdown = ref(false)
+const showSavesModal = ref(false)
 
-// Nom du projet actif (par défaut "Nom du projet")
+const currentProjectSaves = ref([])
+const selectedSaveIds = ref([]) // IDs des sauvegardes cochées pour suppression
+
+// Animation temporaire du bouton de sauvegarde (2s)
+const isSavingBriefly = ref(false)
+const savedFeedbackName = ref('')
+
+// Nom du projet actif
 const currentProjectName = computed(() => {
   const activeProject = projects.value.find(p => p.id === activeProjectId.value)
   if (activeProject && (activeProject.name || activeProject.nom)) {
@@ -54,7 +62,7 @@ const currentProjectName = computed(() => {
   return 'Nom du projet'
 })
 
-// Formatage pour la liste
+// Formatage pour la liste des projets
 const projetsFormatted = computed(() => {
   return projects.value.map(p => ({
     id: p.id,
@@ -62,21 +70,134 @@ const projetsFormatted = computed(() => {
   }))
 })
 
+// Message de dernière sauvegarde effectuée (pour la vue Accueil)
+const lastSaveText = computed(() => {
+  if (currentProjectSaves.value.length === 0) {
+    return 'Aucune sauvegarde effectuée pour ce projet'
+  }
+  const latest = currentProjectSaves.value[0]
+  if (latest.dateStr) {
+    return `Dernière sauvegarde effectuée le ${latest.dateStr}`
+  }
+  const d = new Date(latest.id)
+  const pad = (n) => n.toString().padStart(2, '0')
+  const formatted = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} à ${pad(d.getHours())}h${pad(d.getMinutes())}`
+  return `Dernière sauvegarde effectuée le ${formatted}`
+})
+
+// Chargement des sauvegardes du projet actif
+const loadProjectSaves = () => {
+  if (!activeProjectId.value) return
+  const savesStr = localStorage.getItem(`appli_saves_${activeProjectId.value}`)
+  if (savesStr) {
+    try {
+      currentProjectSaves.value = JSON.parse(savesStr).sort((a, b) => b.id - a.id)
+    } catch(e) { currentProjectSaves.value = [] }
+  } else {
+    currentProjectSaves.value = []
+  }
+  selectedSaveIds.value = []
+}
+
+// Restauration de la sauvegarde la plus récente lors du changement de projet
+const loadLatestSave = () => {
+  if (currentProjectSaves.value.length > 0) {
+    const latest = currentProjectSaves.value[0]
+    Object.keys(latest.data).forEach(key => {
+      localStorage.setItem(key, latest.data[key])
+    })
+  }
+}
+
+// Créer une sauvegarde manuelle
+const effectuerSauvegarde = () => {
+  if (!activeProjectId.value) return
+  
+  const id = activeProjectId.value
+  const projName = currentProjectName.value
+  const timestamp = Date.now()
+  
+  const now = new Date()
+  const pad = (n) => n.toString().padStart(2, '0')
+  const dateFormatted = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} à ${pad(now.getHours())}h${pad(now.getMinutes())}`
+  const saveName = `Copie de ${projName}-${dateFormatted}`
+
+  const dataToSave = {}
+  Object.keys(localStorage).forEach(key => {
+    if (key.includes(id.toString()) && !key.startsWith('appli_saves_')) {
+      dataToSave[key] = localStorage.getItem(key)
+    }
+  })
+
+  const newSave = {
+    id: timestamp,
+    name: saveName,
+    dateStr: dateFormatted,
+    data: dataToSave
+  }
+
+  currentProjectSaves.value.unshift(newSave)
+  localStorage.setItem(`appli_saves_${id}`, JSON.stringify(currentProjectSaves.value))
+
+  // Feedback visuel de 2 secondes
+  savedFeedbackName.value = saveName
+  isSavingBriefly.value = true
+  setTimeout(() => {
+    isSavingBriefly.value = false
+    savedFeedbackName.value = ''
+  }, 2000)
+}
+
+// Recharger une sauvegarde spécifique depuis la modale
+const rechargerSave = (save) => {
+  if (confirm(`Voulez-vous recharger "${save.name}" ? Toutes les modifications non sauvegardées seront perdues.`)) {
+    Object.keys(save.data).forEach(key => {
+      localStorage.setItem(key, save.data[key])
+    })
+    appKey.value++ // Force le rechargement visuel des composants
+    showSavesModal.value = false
+  }
+}
+
+// --- GESTION DE LA SÉLECTION / SUPPRESSION DANS LA MODALE SAUVEGARDES ---
+const isAllSavesSelected = computed(() => {
+  return currentProjectSaves.value.length > 0 && selectedSaveIds.value.length === currentProjectSaves.value.length
+})
+
+const toggleSelectAllSaves = () => {
+  if (isAllSavesSelected.value) {
+    selectedSaveIds.value = []
+  } else {
+    selectedSaveIds.value = currentProjectSaves.value.map(s => s.id)
+  }
+}
+
+const deleteSelectedSaves = () => {
+  if (selectedSaveIds.value.length === 0) return
+  const count = selectedSaveIds.value.length
+  const msg = count === 1 
+    ? "Voulez-vous vraiment supprimer la sauvegarde sélectionnée ?" 
+    : `Voulez-vous vraiment supprimer les ${count} sauvegardes sélectionnées ?`
+
+  if (confirm(msg)) {
+    currentProjectSaves.value = currentProjectSaves.value.filter(s => !selectedSaveIds.value.includes(s.id))
+    localStorage.setItem(`appli_saves_${activeProjectId.value}`, JSON.stringify(currentProjectSaves.value))
+    selectedSaveIds.value = []
+  }
+}
+
 onMounted(() => {
   const auth = localStorage.getItem('app_authenticated')
   if (auth === 'true') {
     isAuthenticated.value = true
   }
-  
+
   const savedProjects = localStorage.getItem('appli_projects')
   const savedActiveId = localStorage.getItem('appli_active_project_id')
 
   if (savedProjects) {
-    try {
-      projects.value = JSON.parse(savedProjects)
-    } catch (e) {
-      projects.value = [{ id: Date.now(), name: 'Nom du projet' }]
-    }
+    try { projects.value = JSON.parse(savedProjects) } 
+    catch (e) { projects.value = [{ id: Date.now(), name: 'Nom du projet' }] }
   } else {
     projects.value = [{ id: Date.now(), name: 'Nom du projet' }]
   }
@@ -88,7 +209,7 @@ onMounted(() => {
   }
 })
 
-// Sauvegardes auto des projets
+// Sauvegardes auto de la configuration des projets
 watch(projects, (newVal) => {
   localStorage.setItem('appli_projects', JSON.stringify(newVal))
 }, { deep: true })
@@ -96,13 +217,22 @@ watch(projects, (newVal) => {
 watch(activeProjectId, (newVal) => {
   if (newVal) {
     localStorage.setItem('appli_active_project_id', newVal.toString())
+    loadProjectSaves()
+    loadLatestSave()
+    appKey.value++
   }
 })
 
 // --- ACTIONS SUR LES PROJETS ---
 const openProjectModal = () => {
-  showProjectListDropdown.value = false // Réinitialiser le déroulé à l'ouverture
+  showProjectListDropdown.value = false
   showProjectModal.value = true
+}
+
+const openSavesModal = () => {
+  loadProjectSaves()
+  showSavesModal.value = true
+  showProjectModal.value = false
 }
 
 const selectProject = (id) => {
@@ -122,10 +252,8 @@ const createProject = () => {
 const renameSpecificProject = (id) => {
   const proj = projects.value.find(p => p.id === id)
   if (!proj) return
-  
   const currentName = proj.name || proj.nom || "Nom du projet"
   const newName = prompt("Modifier le nom du projet :", currentName)
-  
   if (newName && newName.trim()) {
     proj.name = newName.trim()
     proj.nom = newName.trim()
@@ -135,24 +263,20 @@ const renameSpecificProject = (id) => {
 const duplicateProject = (id) => {
   const projToCopy = projects.value.find(p => p.id === id)
   if (!projToCopy) return
-
   const currentName = projToCopy.name || projToCopy.nom || "Nom du projet"
   const newId = Date.now()
   const newName = currentName + " (Copie)"
 
-  // 1. Ajouter le nouveau projet à la liste
   projects.value.push({ id: newId, name: newName })
 
-  // 2. Dupliquer TOUTES les données du localStorage liées à cet ID
   const keys = Object.keys(localStorage)
   keys.forEach(key => {
-    if (key.includes(id.toString())) {
+    if (key.includes(id.toString()) && !key.startsWith('appli_saves_')) {
       const newKey = key.replace(id.toString(), newId.toString())
       localStorage.setItem(newKey, localStorage.getItem(key))
     }
   })
 
-  // 3. Basculer automatiquement sur la copie
   selectProject(newId)
 }
 
@@ -163,18 +287,13 @@ const removeSpecificProject = (id) => {
   }
   
   if (confirm("Attention cette action est irréversible, toutes les données seront perdues.")) {
-    // Supprimer le projet de la liste
     projects.value = projects.value.filter(p => p.id !== id)
-    
-    // Supprimer physiquement les données liées au projet dans le localStorage
     const keys = Object.keys(localStorage)
     keys.forEach(key => {
       if (key.includes(id.toString())) {
         localStorage.removeItem(key)
       }
     })
-
-    // Rediriger vers un projet existant si on a supprimé le projet actif
     if (activeProjectId.value === id && projects.value.length > 0) {
       activeProjectId.value = projects.value[0].id
     }
@@ -210,20 +329,17 @@ const gererSwipe = () => {
       @touchend="handleTouchEnd"
     >
       <div class="sidebar-header">
-        
-        <!-- TITRE DU PROJET ACTIF CLIQUABLE (Sans flèche) -->
         <div v-if="!sidebarReduite" class="sidebar-title-container" @click="openProjectModal" title="Gérer le projet actif">
           <h2 class="sidebar-title">{{ currentProjectName }}</h2>
         </div>
 
         <div class="sidebar-actions">
-          <!-- Bouton fléché retiré, seule la roue crantée reste -->
           <button 
             @click="afficherPreferences = true" 
             class="btn-icon" 
             title="Préférences Système"
           >
-            ⚙️
+            ⚙
           </button>
         </div>
       </div>
@@ -244,7 +360,6 @@ const gererSwipe = () => {
         </button>
       </nav>
 
-      <!-- Zone vide en bas pour rétracter/agrandir au clic -->
       <div class="sidebar-empty-space" @click="sidebarReduite = !sidebarReduite" title="Réduire/Agrandir le menu"></div>
     </aside>
 
@@ -252,32 +367,38 @@ const gererSwipe = () => {
     <main class="main-content">
       <header class="top-bar">
         <div class="top-bar-left">
-          <!-- Nom du projet actif en couleur #3297b3 à la place de "Accueil" si on est sur l'accueil, ou affichage dynamique -->
-          <h1 :style="{ color: currentTab === 'accueil' ? '#3297b3' : '#0f172a' }">
+          <h1 
+            :style="{ 
+              color: currentTab === 'accueil' ? '#8f1818' : '#0f172a',
+              cursor: currentTab === 'accueil' ? 'pointer' : 'default'
+            }"
+            @click="currentTab === 'accueil' ? openProjectModal() : null"
+            :title="currentTab === 'accueil' ? 'Gérer le projet actif' : ''"
+          >
             {{ currentTab === 'accueil' ? currentProjectName : sectionActuelle?.nom }}
           </h1>
-          <!-- Sous-titre masqué sur l'accueil suite à votre demande -->
           <p v-if="currentTab !== 'accueil'" class="top-bar-sub">{{ sectionActuelle?.description }}</p>
         </div>
       </header>
       
-      <section class="content-body">
+<section class="content-body">
         <AccueilView 
           v-if="currentTab === 'accueil'" 
           :project-id="activeProjectId" 
           :projets="projetsFormatted"
-          :key="activeProjectId"
+          :date-derniere-sauvegarde="lastSaveText"
+          :key="'accueil-' + activeProjectId + '-' + appKey"
           @naviguer="changerTab" 
         />
-        <PatientsView v-if="currentTab === 'patients'" :project-id="activeProjectId" :key="activeProjectId" />
-        <RecapPatientsView v-if="currentTab === 'recapPatients'" :project-id="activeProjectId" :key="activeProjectId" />
-        <SeancesView v-if="currentTab === 'seances'" :project-id="activeProjectId" :key="activeProjectId" />
-        <FacturesView v-if="currentTab === 'factures'" :project-id="activeProjectId" :key="activeProjectId" />
-        <UrssafView v-if="currentTab === 'urssaf'" :project-id="activeProjectId" :key="activeProjectId" />
+        <PatientsView v-if="currentTab === 'patients'" :project-id="activeProjectId" :key="'patients-' + activeProjectId + '-' + appKey" />
+        <RecapPatientsView v-if="currentTab === 'recapPatients'" :project-id="activeProjectId" :key="'recap-' + activeProjectId + '-' + appKey" />
+        <SeancesView v-if="currentTab === 'seances'" :project-id="activeProjectId" :key="'seances-' + activeProjectId + '-' + appKey" />
+        <FacturesView v-if="currentTab === 'factures'" :project-id="activeProjectId" :key="'factures-' + activeProjectId + '-' + appKey" />
+        <UrssafView v-if="currentTab === 'urssaf'" :project-id="activeProjectId" :key="'urssaf-' + activeProjectId + '-' + appKey" />
       </section>
     </main>
 
-    <!-- FENÊTRE DE GESTION DES PROJETS -->
+    <!-- FENÊTRE DE GESTION DU PROJET -->
     <div v-if="showProjectModal" class="modal-backdrop">
       <div class="modal-box project-modal">
         <header class="modal-header">
@@ -286,25 +407,39 @@ const gererSwipe = () => {
         </header>
         
         <div class="current-project-view">
-          <!-- Nom du projet actif + Stylo + Dupliquer + Poubelle -->
+          
+          <!-- Bloc Projet Actif -->
           <div class="project-active-header-box">
             <span class="project-large-name" :title="currentProjectName">{{ currentProjectName }}</span>
             <div class="project-actions-group">
               <button @click="renameSpecificProject(activeProjectId)" class="action-ico" title="Renommer">✏️</button>
-              <button @click="duplicateProject(activeProjectId)" class="action-ico" title="Dupliquer">📋</button>
-              <button v-if="projects.length > 1" @click="removeSpecificProject(activeProjectId)" class="action-ico trash" title="Supprimer">🗑️</button>
             </div>
           </div>
 
-          <!-- Bouton + Nouveau Projet placé au-dessus de Liste des projets -->
-          <button @click="createProject" class="btn-primary new-project-btn">+ Nouveau Projet</button>
+          <!-- Actions de sauvegarde sous le projet actif -->
+          <div class="project-saves-actions">
+            <button 
+              v-if="!isSavingBriefly" 
+              @click="effectuerSauvegarde" 
+              class="btn-secondary-action"
+            >
+              💾 Effectuer une sauvegarde
+            </button>
+
+            <!-- Feedback temporaire 2 secondes -->
+            <div v-else class="save-feedback-box" :title="savedFeedbackName">
+              ✅ {{ savedFeedbackName }}
+            </div>
+
+            <button @click="openSavesModal" class="btn-secondary-action icon-only" title="Voir les sauvegardes">👁️</button>
+          </div>
+
+          <button @click="createProject" class="btn-primary new-project-btn" style="margin-top: 10px;">+ Nouveau Projet</button>
           
-          <!-- Bouton Liste des projets (Déroulant) -->
           <button @click="showProjectListDropdown = !showProjectListDropdown" class="btn-list-projects">
             📋 Liste des projets {{ showProjectListDropdown ? '▲' : '▼' }}
           </button>
 
-          <!-- Liste déroulante des projets -->
           <div v-if="showProjectListDropdown" class="projects-full-list">
             <div 
               v-for="proj in projetsFormatted" 
@@ -326,6 +461,70 @@ const gererSwipe = () => {
       </div>
     </div>
 
+    <!-- FENÊTRE VISUALISATION ET SUPPRESSION DES SAUVEGARDES -->
+    <div v-if="showSavesModal" class="modal-backdrop">
+      <div class="modal-box saves-modal">
+        <header class="modal-header">
+          <div class="header-title-with-trash">
+            <h3>👁️ Sauvegardes du projet</h3>
+            <button 
+              @click="deleteSelectedSaves" 
+              class="btn-trash-icon" 
+              :disabled="selectedSaveIds.length === 0"
+              :title="selectedSaveIds.length > 0 ? 'Supprimer les fichiers sélectionnés' : 'Sélectionnez au moins une sauvegarde à supprimer'"
+            >
+              🗑️
+            </button>
+          </div>
+          <button @click="showSavesModal = false; showProjectModal = true" class="btn-close">✕</button>
+        </header>
+
+        <div class="saves-list-container">
+          <div v-if="currentProjectSaves.length === 0" class="empty-state">
+            Aucune sauvegarde pour ce projet.
+          </div>
+          
+          <table v-else class="saves-table">
+            <thead>
+              <tr>
+                <th class="th-checkbox">
+                  <input 
+                    type="checkbox" 
+                    :checked="isAllSavesSelected" 
+                    @change="toggleSelectAllSaves" 
+                    title="Tout sélectionner / Tout désélectionner"
+                  />
+                </th>
+                <th class="th-name">Fichier / Date</th>
+                <th class="th-action">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="save in currentProjectSaves" :key="save.id" class="save-row">
+                <td class="td-checkbox">
+                  <input 
+                    type="checkbox" 
+                    :value="save.id" 
+                    v-model="selectedSaveIds" 
+                  />
+                </td>
+                <td class="td-name">
+                  <span class="save-name-text">{{ save.name }}</span>
+                </td>
+                <td class="td-action">
+                  <button @click="rechargerSave(save)" class="btn-reload-save" title="Recharger cette sauvegarde">Recharger</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <footer class="modal-footer" style="margin-top: 16px;">
+          <button @click="showSavesModal = false; showProjectModal = true" class="btn-primary" style="width: 100%;">Fermer</button>
+        </footer>
+      </div>
+    </div>
+
     <!-- FENÊTRE DES PRÉFÉRENCES SYSTÈME -->
     <div v-if="afficherPreferences" class="modal-backdrop">
       <div class="modal-box">
@@ -336,17 +535,8 @@ const gererSwipe = () => {
 
         <div class="preferences-body">
           <div class="pref-group">
-            <label>Sauvegarde automatique</label>
-            <select v-model="intervalleSauvegarde" class="form-input">
-              <option :value="0">Désactivée</option>
-              <option :value="2">Toutes les 2 minutes</option>
-              <option :value="5">Toutes les 5 minutes</option>
-              <option :value="10">Toutes les 10 minutes</option>
-            </select>
-          </div>
-          <div class="pref-group">
             <label>Stockage local</label>
-            <p class="pref-desc">Vos données sont enregistrées en toute sécurité dans la mémoire de votre navigateur actuel.</p>
+            <p class="pref-desc">Vos données et sauvegardes manuelles sont enregistrées en toute sécurité dans la mémoire de votre navigateur.</p>
           </div>
         </div>
 
@@ -406,7 +596,6 @@ html, body, #app {
   gap: 8px;
 }
 
-/* Titre cliquable sans flèche */
 .sidebar-title-container {
   display: flex;
   align-items: center;
@@ -548,10 +737,8 @@ html, body, #app {
   justify-content: space-between;
 }
 
-/* Modifiez ou ajoutez ceci pour centrer le contenu de l'en-tête */
 .top-bar-left {
-  width: 100%;
-  text-align: center;
+  flex: 1;
 }
 
 .top-bar-left h1 {
@@ -563,6 +750,23 @@ html, body, #app {
   font-size: 13px;
   color: #64748b;
   margin-top: 2px;
+}
+
+/* Information Dernière Sauvegarde (Top Bar) */
+.top-bar-right {
+  display: flex;
+  align-items: center;
+  margin-left: 20px;
+}
+
+.last-save-info {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  background-color: #f1f5f9;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
 }
 
 .content-body {
@@ -587,7 +791,7 @@ html, body, #app {
   background: white;
   padding: 24px;
   border-radius: 12px;
-  max-width: 480px;
+  max-width: 520px;
   width: 90%;
   box-shadow: 0 10px 25px rgba(0,0,0,0.15);
   max-height: 85vh;
@@ -603,6 +807,35 @@ html, body, #app {
   flex-shrink: 0;
 }
 
+.header-title-with-trash {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-trash-icon {
+  background: none;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background-color: #fef2f2;
+}
+
+.btn-trash-icon:hover:not(:disabled) {
+  background-color: #fee2e2;
+  border-color: #ef4444;
+}
+
+.btn-trash-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: #cbd5e1;
+  background-color: #f1f5f9;
+}
+
 .btn-close {
   background: none;
   border: none;
@@ -611,11 +844,11 @@ html, body, #app {
   color: #64748b;
 }
 
-/* Styles spécifiques à la modale Projet */
+/* Projet Modal */
 .current-project-view {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -637,7 +870,7 @@ html, body, #app {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 240px;
+  max-width: 280px;
 }
 
 .project-actions-group {
@@ -657,6 +890,56 @@ html, body, #app {
 
 .action-ico:hover { background: #e2e8f0; }
 .action-ico.trash:hover { background: #fee2e2; }
+
+/* Boutons secondaires (Sauvegardes) */
+.project-saves-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.btn-secondary-action {
+  flex: 1;
+  padding: 10px;
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-secondary-action:hover {
+  background-color: #e2e8f0;
+}
+
+.save-feedback-box {
+  flex: 1;
+  padding: 10px;
+  background-color: #dcfce7;
+  border: 1px solid #86efac;
+  color: #166534;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-secondary-action.icon-only {
+  flex: none;
+  width: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
 
 .btn-list-projects {
   width: 100%;
@@ -679,7 +962,7 @@ html, body, #app {
   background-color: #e2e8f0;
 }
 
-/* Liste de projets déroulante */
+/* Liste déroulante des projets */
 .projects-full-list {
   display: flex;
   flex-direction: column;
@@ -731,11 +1014,86 @@ html, body, #app {
   gap: 2px;
 }
 
-.new-project-btn {
-  width: 100%;
+/* Modale Sauvegardes & Tableau par colonne */
+.saves-list-container {
+  display: flex;
+  flex-direction: column;
+  max-height: 380px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
 }
 
-/* Formulaires & Préférences */
+.empty-state {
+  text-align: center;
+  padding: 24px;
+  color: #64748b;
+  font-style: italic;
+}
+
+.saves-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.saves-table th {
+  background-color: #f8fafc;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  font-weight: 600;
+  color: #475569;
+}
+
+.saves-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.saves-table tr:last-child td {
+  border-bottom: none;
+}
+
+.th-checkbox, .td-checkbox {
+  width: 40px;
+  text-align: center;
+}
+
+.th-checkbox input, .td-checkbox input {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.save-name-text {
+  font-weight: 600;
+  color: #1e293b;
+  word-break: break-all;
+}
+
+.th-action, .td-action {
+  width: 100px;
+  text-align: right;
+}
+
+.btn-reload-save {
+  background-color: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-reload-save:hover {
+  background-color: #dbeafe;
+}
+
+/* Preferences Body */
 .preferences-body {
   display: flex;
   flex-direction: column;
@@ -750,27 +1108,20 @@ html, body, #app {
 }
 
 .pref-group label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: #475569;
+  color: #334155;
 }
 
 .pref-desc {
   font-size: 13px;
   color: #64748b;
-}
-
-.form-input {
-  padding: 10px 12px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 14px;
-  flex: 1;
+  line-height: 1.4;
 }
 
 .modal-footer {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   gap: 8px;
 }
 
@@ -784,6 +1135,7 @@ html, body, #app {
   cursor: pointer;
   transition: background 0.15s;
   text-align: center;
+  flex: 1;
 }
 
 .btn-primary:hover { background-color: #1d4ed8; }
