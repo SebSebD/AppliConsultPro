@@ -125,21 +125,26 @@
               <fieldset class="form-section">
                 <legend>Tarification & Rendez-vous</legend>
 
-                <!-- Tarif avec flèches +10 / -10 -->
+                <!-- Tarif avec flèches -10 / +10 -->
                 <div class="form-row">
                   <label>Tarif par séance (€)</label>
-                  <div class="montant-input-wrapper">
+                  
+                  <div class="montant-stepper-container">
+                    <!-- Bouton Moins (décrémenter de 10) à gauche -->
+                    <button type="button" class="btn-step-side" @click="ajusterTarif(-10)" title="-10">-</button>
+
+                    <!-- Input centré au milieu -->
                     <input 
                       v-model.number="form.tarifParDefaut" 
                       type="number" 
-                      step="10" 
+                      step="0.5" 
                       min="0"
-                      class="form-input number-input" 
+                      required 
+                      class="form-input text-center number-input-centered" 
                     />
-                    <div class="stepper-buttons">
-                      <button type="button" class="btn-step" @click="ajusterTarif(10)" title="+10">▲</button>
-                      <button type="button" class="btn-step" @click="ajusterTarif(-10)" title="-10">▼</button>
-                    </div>
+
+                    <!-- Bouton Plus (incrémenter de 10) à droite -->
+                    <button type="button" class="btn-step-side" @click="ajusterTarif(10)" title="+10">+</button>
                   </div>
                 </div>
 
@@ -890,35 +895,63 @@ onMounted(() => {
   cursor: pointer;
 }
 
-.montant-input-wrapper {
-  position: relative;
+.montant-stepper-container {
   display: flex;
   align-items: center;
-  max-width: 140px;
+  gap: 6px;
+  max-width: 150px; /* Réduit pour ne pas déborder de la fenêtre */
   width: 100%;
 }
 
-.number-input {
-  width: 100%;
-  padding-right: 28px;
-  text-align: right;
+/* Boutons tactiles compacts mais confortables */
+.btn-step-side {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #334155;
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-step-side:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.btn-step-side:active {
+  background: #cbd5e1;
+}
+
+/* Input réduit et centré */
+.number-input-centered {
+  text-align: center;
+  font-weight: 600;
+  width: 60px; /* Force une taille compacte au milieu */
+  padding: 6px 4px;
   -webkit-appearance: none;
   appearance: none;
   -moz-appearance: textfield;
 }
 
-.number-input::-webkit-outer-spin-button,
-.number-input::-webkit-inner-spin-button {
+.number-input-centered::-webkit-outer-spin-button,
+.number-input-centered::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-.stepper-buttons {
-  position: absolute;
-  right: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.number-input-centered::-webkit-outer-spin-button,
+.number-input-centered::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .btn-step {

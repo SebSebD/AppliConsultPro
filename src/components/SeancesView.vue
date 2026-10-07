@@ -116,14 +116,38 @@
             </select>
           </div>
 
+          <!-- Tarif de la séance avec flèches tactiles -10 / +10 -->
           <div class="form-group">
             <label>Tarif de la séance (€)</label>
-            <input v-model.number="form.tarif" type="number" step="0.5" required class="form-input" />
+            <div class="montant-stepper-container">
+              <button type="button" class="btn-step-side" @click="ajusterTarifSeance(-10)" title="-10">-</button>
+              <input 
+                v-model.number="form.tarif" 
+                type="number" 
+                step="1" 
+                min="0"
+                required 
+                class="form-input text-center number-input-centered" 
+              />
+              <button type="button" class="btn-step-side" @click="ajusterTarifSeance(10)" title="+10">+</button>
+            </div>
           </div>
 
+          <!-- Montant payé avec flèches tactiles -10 / +10 -->
           <div class="form-group">
             <label>Montant payé (€)</label>
-            <input v-model.number="form.montant" type="number" step="0.5" required class="form-input" />
+            <div class="montant-stepper-container">
+              <button type="button" class="btn-step-side" @click="ajusterMontant(-10)" title="-10">-</button>
+              <input 
+                v-model.number="form.montant" 
+                type="number" 
+                step="1" 
+                min="0"
+                required 
+                class="form-input text-center number-input-centered" 
+              />
+              <button type="button" class="btn-step-side" @click="ajusterMontant(10)" title="+10">+</button>
+            </div>
           </div>
 
           <div class="modal-actions">
@@ -251,6 +275,16 @@ const seancesFiltrees = computed(() => {
     }
   })
 })
+
+const ajusterTarifSeance = (valeur) => {
+  let actuel = Number(form.tarif) || 0
+  form.tarif = Math.max(0, Number((actuel + valeur).toFixed(2)))
+}
+
+const ajusterMontant = (valeur) => {
+  let actuel = Number(form.montant) || 0
+  form.montant = Math.max(0, Number((actuel + valeur).toFixed(2)))
+}
 
 const seancesTriees = computed(() => {
   const enrichies = seancesFiltrees.value.map(s => {
@@ -612,22 +646,27 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
+/* Centrage global des groupes du formulaire dans la modale */
 .modal-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  align-items: center; /* Centre les éléments enfants horizontalement */
+  gap: 16px;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
+  align-items: center; /* Centre le label et le stepper */
   gap: 6px;
+  width: 100%;
 }
 
 .form-group label {
   font-size: 13px;
   font-weight: 600;
   color: #475569;
+  text-align: center; /* Centre le texte du libellé au-dessus du bloc */
 }
 
 .form-input {
@@ -636,6 +675,61 @@ onMounted(() => {
   border-radius: 8px;
   font-size: 14px;
 }
+
+/* Centrage et dimensionnement du stepper tactile */
+.montant-stepper-container {
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Centre les boutons et l'input à l'intérieur du conteneur */
+  gap: 6px;
+  max-width: 160px;
+  width: 100%;
+  margin: 0 auto; /* Force le centrage du bloc complet */
+}
+
+.btn-step-side {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #334155;
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-step-side:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.btn-step-side:active {
+  background: #cbd5e1;
+}
+
+.number-input-centered {
+  text-align: center;
+  font-weight: 600;
+  width: 60px;
+  padding: 6px 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  -moz-appearance: textfield;
+}
+
+.number-input-centered::-webkit-outer-spin-button,
+.number-input-centered::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+/* --------------------------------------------- */
 
 .modal-actions {
   display: flex;
