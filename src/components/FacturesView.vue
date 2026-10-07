@@ -63,6 +63,8 @@
 
         <div class="lignes-list">
           <div v-for="(ligne, index) in lignesFacture" :key="ligne.id" class="ligne-item-card">
+            
+            <!-- GRILLE DU HAUT : Date et Description uniquement -->
             <div class="ligne-grid-top">
               <div class="form-group">
                 <label>Date séance</label>
@@ -84,11 +86,6 @@
                 </select>
               </div>
 
-              <div class="form-group">
-                <label>Montant HT (€)</label>
-                <input type="number" step="0.01" v-model.number="ligne.montantHT" class="form-input w-100" />
-              </div>
-
               <button 
                 v-if="lignesFacture.length > 1" 
                 @click="supprimerLigne(index)" 
@@ -99,10 +96,20 @@
               </button>
             </div>
 
+            <!-- GRILLE DU BAS : Montant HT déplacé à gauche, suivi du Paiement -->
             <div class="ligne-grid-bottom">
+                <div class="form-group">
+                <label>Montant HT (€)</label>
+                <div class="montant-stepper-container">
+                  <button type="button" @click="ajusterMontantLigne(ligne, -10)" class="btn-stepper">-</button>
+                  <input type="number" step="0.01" v-model.number="ligne.montantHT" class="form-input text-center w-100" />
+                  <button type="button" @click="ajusterMontantLigne(ligne, 10)" class="btn-stepper">+</button>
+                </div>
+              </div>
+
               <div class="form-group">
                 <label>Mode de paiement</label>
-                <select v-model="ligne.moyenPaiement" class="form-input">
+                <select v-model="ligne.moyenPaiement" class="form-input text-center">
                   <option v-for="mode in modesPaiement" :key="mode" :value="mode">{{ mode }}</option>
                 </select>
               </div>
@@ -112,6 +119,7 @@
                 <input type="date" v-model="ligne.datePaiement" class="form-input" />
               </div>
             </div>
+
           </div>
         </div>
       </div>
@@ -385,6 +393,11 @@ const descriptionsPredefinies = computed(() => {
   return customDescriptionsStockees.value.split('|').filter(d => d.trim() !== '')
 })
 
+const ajusterMontantLigne = (ligne, valeur) => {
+  let actuel = Number(ligne.montantHT) || 0
+  ligne.montantHT = Math.max(0, Number((actuel + valeur).toFixed(2)))
+}
+
 // Lignes de facture
 const createLigneDefault = () => ({
   id: Date.now() + Math.random(),
@@ -539,6 +552,9 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* ==========================================
+   1. STRUCTURE & CONTENEURS GLOBAUX
+   ========================================== */
 .factures-container {
   padding-bottom: 80px;
 }
@@ -559,16 +575,6 @@ onMounted(() => {
   align-items: center;
 }
 
-.gap-20 { gap: 20px; }
-.gap-16 { gap: 16px; }
-.gap-10 { gap: 10px; }
-.mt-12 { margin-top: 12px; }
-.mt-6 { margin-top: 6px; }
-.flex-1 { flex: 1; }
-.flex-2 { flex: 2; }
-.w-200 { width: 200px; }
-.w-100 { width: 100px; }
-
 .divider {
   border: none;
   border-top: 1px solid #e2e8f0;
@@ -587,24 +593,36 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
-.info-box {
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px;
-  font-size: 13px;
-  color: #334155;
-  line-height: 1.5;
+/* ==========================================
+   2. FORMULAIRES & INPUTS
+   ========================================== */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.info-box-title {
-  font-weight: 700;
+.form-group label {
+  font-size: 11px;
+  font-weight: 600;
   color: #64748b;
-  margin-bottom: 4px;
 }
 
-.text-muted { color: #94a3b8; }
+.text-center {
+  text-align: center;
+  text-align-last: center;
+}
 
+/* Masquer les flèches des inputs numériques */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+
+/* ==========================================
+   3. LIGNES DE FACTURE & GRILLES
+   ========================================== */
 .lignes-list {
   display: flex;
   flex-direction: column;
@@ -621,41 +639,84 @@ onMounted(() => {
   gap: 12px;
 }
 
-.ligne-grid-top, .ligne-grid-bottom {
+.ligne-grid-top {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.form-group {
+/* Grille du bas : Montant, Mode, Date de paiement */
+.ligne-grid-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 40px;
+  margin-top: 12px;
+  align-items: start;
+}
+
+.ligne-grid-bottom .form-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  align-items: center;
 }
 
-.form-group label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #64748b;
+.ligne-grid-bottom .form-group label {
+  text-align: center;
+  width: 100%;
+  margin-bottom: 4px;
 }
 
-.btn-secondary {
+.ligne-grid-bottom .form-input,
+.ligne-grid-bottom .montant-stepper-container {
+  width: 80%;
+}
+
+.ligne-grid-bottom input,
+.ligne-grid-bottom select {
   padding: 6px 12px;
-  background-color: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 13px;
-  cursor: pointer;
 }
 
-.btn-secondary:hover { background-color: #f1f5f9; }
+/* ==========================================
+   4. COMPOSANTS SPÉCIFIQUES (Stepper)
+   ========================================== */
+.montant-stepper-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
-.btn-icon-danger {
-  background: none;
-  border: none;
+.btn-stepper {
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  font-weight: bold;
+  padding: 6px 12px;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 16px;
-  margin-top: 16px;
+  transition: background 0.15s;
+}
+
+.btn-stepper:hover {
+  background-color: #e2e8f0;
+}
+
+/* ==========================================
+   5. BOÎTES D'INFORMATION & ACTIONS
+   ========================================== */
+.info-box {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.info-box-title {
+  font-weight: 700;
+  color: #64748b;
+  margin-bottom: 4px;
 }
 
 .bottom-action-bar {
@@ -670,6 +731,22 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   z-index: 10;
+}
+
+/* ==========================================
+   6. BOUTONS
+   ========================================== */
+.btn-secondary {
+  padding: 6px 12px;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-secondary:hover { 
+  background-color: #f1f5f9; 
 }
 
 .btn-primary-lg {
@@ -688,6 +765,40 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
+.btn-icon-danger {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  margin-top: 16px;
+}
+
+.btn-primary-sm {
+  padding: 4px 8px;
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.btn-secondary-sm {
+  padding: 4px 8px;
+  background: white;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.btn-danger-sm {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* ==========================================
+   7. MODALES & GESTION DES DESCRIPTIONS
+   ========================================== */
 .form-stack {
   display: flex;
   flex-direction: column;
@@ -723,30 +834,9 @@ onMounted(() => {
   gap: 6px;
 }
 
-.btn-primary-sm {
-  padding: 4px 8px;
-  background-color: #2563eb;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.btn-secondary-sm {
-  padding: 4px 8px;
-  background: white;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.btn-danger-sm {
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-/* APERÇU A4 ET IMPRESSION */
+/* ==========================================
+   8. APERÇU A4 & IMPRESSION
+   ========================================== */
 .preview-modal-box {
   max-width: 700px !important;
   width: 95% !important;
@@ -923,7 +1013,20 @@ onMounted(() => {
   object-fit: contain;
 }
 
-/* STYLES D'IMPRESSION (WINDOW.PRINT) */
+/* ==========================================
+   9. UTILITAIRES & MEDIA QUERIES (PRINT)
+   ========================================== */
+.gap-20 { gap: 20px; }
+.gap-16 { gap: 16px; }
+.gap-10 { gap: 10px; }
+.mt-12 { margin-top: 12px; }
+.mt-6 { margin-top: 6px; }
+.flex-1 { flex: 1; }
+.flex-2 { flex: 2; }
+.w-200 { width: 200px; }
+.w-100 { width: 100px; }
+.text-muted { color: #94a3b8; }
+
 @media print {
   body * {
     visibility: hidden;

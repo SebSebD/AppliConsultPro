@@ -1,12 +1,24 @@
 <template>
   <div class="seances-container">
+    <!-- EN-TÊTE AVEC TITRE ET CASE À COCHER TRIMESTRE EN COURS -->
+    <div class="seances-header-bar">
+      <label class="checkbox-trimestre-label">
+        <input 
+          type="checkbox" 
+          v-model="trimestreEnCoursActif" 
+          @change="basculerTrimestreEnCours"
+        />
+        Trimestre en cours
+      </label>
+    </div>
+
     <!-- BANDEAU DES FILTRES TEMPORELS -->
     <div class="period-filters-bar">
       <button 
         v-for="f in filtresTemporels" 
         :key="f.id"
         :class="['btn-filter-period', { active: filtreTemporelActuel === f.id }]"
-        @click="filtreTemporelActuel = f.id"
+        @click="changerFiltreTemporel(f.id)"
       >
         {{ f.label }}
       </button>
@@ -52,24 +64,24 @@
             v-for="s in seancesTriees" 
             :key="s.id" 
             class="tr-seance"
-            @click="ouvrirModalEditer(s)"
           >
-            <td class="td-patient">
+            <td class="td-patient" @click="ouvrirModalEditer(s)">
               <strong :class="{ 'unassigned-patient': !s.patientId }">{{ s.patientNom }}</strong>
             </td>
-            <td class="td-date">{{ formerDate(s.date) }}</td>
-            <td class="td-payement">
+            <td class="td-date" @click="ouvrirModalEditer(s)">{{ formerDate(s.date) }}</td>
+            <td class="td-payement" @click="ouvrirModalEditer(s)">
               <div class="pay-info">
                 <span class="pay-moyen">{{ s.moyenPaiement || 'CB' }}</span>
                 <span class="pay-trimestre">{{ s.chaineTrimestre }}</span>
               </div>
             </td>
-            <td class="td-tarif text-right">{{ s.tarifConvenu.toFixed(2) }} €</td>
-            <td class="td-montant text-right"><strong>{{ s.montant.toFixed(2) }} €</strong></td>
-            <td class="td-voyant text-center">
+            <td class="td-tarif text-right" @click="ouvrirModalEditer(s)">{{ s.tarifConvenu.toFixed(2) }} €</td>
+            <td class="td-montant text-right" @click="ouvrirModalEditer(s)"><strong>{{ s.montant.toFixed(2) }} €</strong></td>
+            <td class="td-voyant text-center" @click="ouvrirModalEditer(s)">
               <span class="status-dot" :style="{ backgroundColor: s.couleurVoyant }"></span>
             </td>
             <td class="td-actions" @click.stop>
+              <button @click="ouvrirModalEditer(s)" class="btn-edit-row" title="Modifier">✏️</button>
               <button @click="demanderSuppression(s)" class="btn-trash-row" title="Supprimer">🗑️</button>
             </td>
           </tr>
@@ -201,7 +213,19 @@ const props = defineProps({
 const patients = ref([])
 const seances = ref([])
 
-const filtreTemporelActuel = ref('annee')
+// Par défaut, coché donc positionné sur le trimestre en cours
+const trimestreEnCoursActif = ref(true)
+
+// Fonction utilitaire pour déterminer l'ID du trimestre actuel (ex: 'trimestre2')
+const obtenirTrimestreActuelId = () => {
+  const mois = new Date().getMonth() + 1
+  if (mois <= 3) return 'trimestre1'
+  if (mois <= 6) return 'trimestre2'
+  if (mois <= 9) return 'trimestre3'
+  return 'trimestre4'
+}
+
+const filtreTemporelActuel = ref(obtenirTrimestreActuelId())
 const colonneTriActuelle = ref('date')
 const triAscendant = ref(false)
 
@@ -255,6 +279,27 @@ const calculerTrimestre = (dateStr) => {
   return 'Trimestre 4'
 }
 
+// Gestion de la case à cocher "Trimestre en cours"
+const basculerTrimestreEnCours = () => {
+  if (trimestreEnCoursActif.value) {
+    filtreTemporelActuel.value = obtenirTrimestreActuelId()
+  } else {
+    filtreTemporelActuel.value = 'annee'
+  }
+}
+
+// Clic manuel sur un bouton de filtre temporel
+const changerFiltreTemporel = (id) => {
+  filtreTemporelActuel.value = id
+  // Si l'utilisateur clique sur "Année", on décoche la case "Trimestre en cours"
+  if (id === 'annee') {
+    trimestreEnCoursActif.value = false
+  } else {
+    // Si l'utilisateur clique sur un trimestre spécifique, on vérifie si c'est le trimestre en cours
+    trimestreEnCoursActif.value = (id === obtenirTrimestreActuelId())
+  }
+}
+
 const seancesFiltrees = computed(() => {
   const anneeCourante = new Date().getFullYear()
   
@@ -289,8 +334,6 @@ const ajusterMontant = (valeur) => {
 const seancesTriees = computed(() => {
   const enrichies = seancesFiltrees.value.map(s => {
     const patient = patients.value.find(p => p.id === s.patientId)
-    // Récupère le tarif propre à la séance s'il existe (ex: modifié dans RecapPatient), 
-    // sinon bascule sur s.tarifConvenu ou le tarif par défaut du patient
     const tarifConvenu = Number(s.tarif ?? s.tarifConvenu ?? patient?.tarifParDefaut ?? 0.0)
     const montantPaye = Number(s.montant ?? 0)
 
@@ -476,11 +519,27 @@ onMounted(() => {
   overflow: hidden;
 }
 
+.seances-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  background-color: #ffffff;
+}
+
+.seances-header-bar h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
 .period-filters-bar {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 20px;
+  padding: 12px 20px;
   border-bottom: 1px solid #e2e8f0;
   background-color: #f8fafc;
 }
@@ -502,6 +561,24 @@ onMounted(() => {
   border-color: #93c5fd;
   color: #0f172a;
   font-weight: 700;
+}
+
+.checkbox-trimestre-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-trimestre-label input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
 }
 
 .btn-primary-add {
@@ -549,11 +626,17 @@ onMounted(() => {
 
 .tr-seance {
   border-bottom: 1px solid #f1f5f9;
-  cursor: pointer;
   transition: background 0.15s;
 }
 
-.tr-seance:hover { background-color: #f8fafc; }
+.tr-seance td {
+  cursor: pointer;
+}
+
+.tr-seance:hover td:not(.td-actions) { 
+  background-color: #f8fafc; 
+}
+
 .seances-table td { padding: 12px 16px; }
 
 .unassigned-patient {
@@ -580,11 +663,30 @@ onMounted(() => {
   border-radius: 50%;
 }
 
+.td-actions {
+  cursor: default !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-edit-row {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.btn-edit-row:hover { opacity: 1; }
+
 .btn-trash-row {
   background: none;
   border: none;
   cursor: pointer;
   opacity: 0.5;
+  font-size: 14px;
 }
 
 .btn-trash-row:hover { opacity: 1; }
@@ -650,14 +752,14 @@ onMounted(() => {
 .modal-form {
   display: flex;
   flex-direction: column;
-  align-items: center; /* Centre les éléments enfants horizontalement */
+  align-items: center;
   gap: 16px;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  align-items: center; /* Centre le label et le stepper */
+  align-items: center;
   gap: 6px;
   width: 100%;
 }
@@ -666,7 +768,7 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 600;
   color: #475569;
-  text-align: center; /* Centre le texte du libellé au-dessus du bloc */
+  text-align: center;
 }
 
 .form-input {
@@ -674,17 +776,18 @@ onMounted(() => {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   font-size: 14px;
+  width: 100%;
 }
 
 /* Centrage et dimensionnement du stepper tactile */
 .montant-stepper-container {
   display: flex;
   align-items: center;
-  justify-content: center; /* Centre les boutons et l'input à l'intérieur du conteneur */
+  justify-content: center;
   gap: 6px;
   max-width: 160px;
   width: 100%;
-  margin: 0 auto; /* Force le centrage du bloc complet */
+  margin: 0 auto;
 }
 
 .btn-step-side {
@@ -729,13 +832,13 @@ onMounted(() => {
   -webkit-appearance: none;
   margin: 0;
 }
-/* --------------------------------------------- */
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
   margin-top: 10px;
+  width: 100%;
 }
 
 .btn-cancel {

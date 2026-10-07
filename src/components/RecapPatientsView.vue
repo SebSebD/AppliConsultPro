@@ -114,7 +114,7 @@
             </div>
 
             <div v-else class="history-table">
-              <!-- En-tête / Légende requise -->
+              <!-- En-tête -->
               <div class="history-header">
                 <span class="col-header date-col">Date de la séance</span>
                 <span class="col-header tarif-col">Tarif de la séance</span>
@@ -130,17 +130,32 @@
                     <span class="history-trimestre">{{ s.chaineTrimestre }}</span>
                   </div>
 
-                  <!-- Col 2 : Tarif de la séance (Editable) -->
+                  <!-- Col 2 : Tarif de la séance (Éditable par remplissage + Bouton ✔ / Stylo) -->
                   <div class="history-col tarif-col">
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      :value="s.tarifEffectif"
-                      @change="e => modifierTarifSeance(s.id, e.target.value)"
-                      class="input-tarif"
-                      title="Modifier le tarif pour cette séance"
-                    />
-                    <span class="currency-symbol">€</span>
+                    <div class="tarif-display-wrapper">
+                      <template v-if="!s.isEditing">
+                        <span class="tarif-text">{{ s.tarifEffectif.toFixed(2) }} €</span>
+                        <button type="button" class="btn-icon-edit" @click="activerEditionTarif(s)" title="Modifier le tarif">
+                          ✏️
+                        </button>
+                      </template>
+                      <template v-else>
+                        <div class="edit-input-group">
+                          <input 
+                            type="number" 
+                            step="0.01"
+                            class="input-tarif is-editable" 
+                            v-model.number="s.tempTarif"
+                            @keyup.enter="validerEditionTarif(s)"
+                            autofocus
+                          />
+                          <span class="currency-symbol">€</span>
+                          <button type="button" class="btn-icon-validate" @click="validerEditionTarif(s)" title="Valider">
+                            ✔
+                          </button>
+                        </div>
+                      </template>
+                    </div>
                   </div>
 
                   <!-- Col 3 : Montant Payé & Mode de Paiement -->
@@ -168,7 +183,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { db } from '../db.js'
 
 const props = defineProps({
@@ -182,6 +197,8 @@ const patients = ref([])
 const seances = ref([])
 const filtreActuel = ref('tous')
 const patientDetail = ref(null)
+
+const seancesEditions = ref({})
 
 const anneeCourante = new Date().getFullYear()
 
@@ -228,7 +245,6 @@ const calculerTrimestre = (dateStr) => {
   return 'Trimestre 4'
 }
 
-// Enrichissement des patients avec calcul basé sur le tarif de chaque séance
 const patientsEnrichis = computed(() => {
   return patients.value.map(p => {
     const seancesP = seances.value.filter(s => s.patientId === p.id)
@@ -236,7 +252,6 @@ const patientsEnrichis = computed(() => {
 
     const totalPaye = seancesP.reduce((sum, s) => sum + (Number(s.montant) || 0), 0)
     
-    // Le total dû prend le tarif spécifique de la séance s'il existe, sinon le tarif par défaut
     const totalDu = seancesP.reduce((sum, s) => {
       const tarifSeance = (s.tarif !== undefined && s.tarif !== null && s.tarif !== '') 
         ? Number(s.tarif) 
@@ -306,13 +321,14 @@ const couleurTotalFiltre = computed(() => {
   return '#1e293b'
 })
 
-// MODAL DETAILS PATIENT
 const ouvrirDetailPatient = (p) => {
   patientDetail.value = p
+  seancesEditions.value = {}
 }
 
 const fermerDetailPatient = () => {
   patientDetail.value = null
+  seancesEditions.value = {}
 }
 
 const seancesPatientDetail = computed(() => {
@@ -320,11 +336,26 @@ const seancesPatientDetail = computed(() => {
   const seancesP = seances.value.filter(s => s.patientId === patientDetail.value.id)
   const tarifParDefaut = Number(patientDetail.value.tarifParDefaut ?? 60.0)
 
-  return seancesP.map(s => ({
-    ...s,
-    chaineTrimestre: calculerTrimestre(s.date),
-    tarifEffectif: (s.tarif !== undefined && s.tarif !== null && s.tarif !== '') ? Number(s.tarif) : tarifParDefaut
-  })).sort((a, b) => new Date(b.date) - new Date(a.date))
+  return seancesP.map(s => {
+    const tarifEff = (s.tarif !== undefined && s.tarif !== null && s.tarif !== '') ? Number(s.tarif) : tarifParDefaut
+    
+    if (!seancesEditions.value[s.id]) {
+      seancesEditions.value[s.id] = { isEditing: false, tempTarif: tarifEff }
+    }
+
+    return {
+      ...s,
+      chaineTrimestre: calculerTrimestre(s.date),
+      tarifEffectif: tarifEff,
+      isEditing: seancesEditions.value[s.id].isEditing,
+      get tempTarif() {
+        return seancesEditions.value[s.id].tempTarif
+      },
+      set tempTarif(val) {
+        seancesEditions.value[s.id].tempTarif = val
+      }
+    }
+  }).sort((a, b) => new Date(b.date) - new Date(a.date))
 })
 
 const totalPayePatientDetail = computed(() => {
@@ -343,13 +374,26 @@ const bilanTrimestres = computed(() => {
   })
 })
 
-// Modification à la volée du tarif d'une séance spécifique
-const modifierTarifSeance = async (seanceId, nouveauTarif) => {
-  const valNum = parseFloat(nouveauTarif)
-  if (isNaN(valNum)) return
+const activerEditionTarif = async (s) => {
+  if (seancesEditions.value[s.id]) {
+    seancesEditions.value[s.id].isEditing = true
+    seancesEditions.value[s.id].tempTarif = s.tarifEffectif
+    await nextTick()
+  }
+}
 
-  await db.seances.update(seanceId, { tarif: valNum })
-  await chargerDonnees()
+const validerEditionTarif = async (s) => {
+  if (!seancesEditions.value[s.id]?.isEditing) return
+  
+  const valNum = parseFloat(seancesEditions.value[s.id].tempTarif)
+  if (!isNaN(valNum)) {
+    await db.seances.update(s.id, { tarif: valNum })
+    await chargerDonnees()
+  }
+  
+  if (seancesEditions.value[s.id]) {
+    seancesEditions.value[s.id].isEditing = false
+  }
 }
 
 watch(() => props.projectId, () => {
@@ -371,6 +415,13 @@ onMounted(() => {
   border-radius: 12px;
   border: 1px solid #e2e8f0;
   overflow: hidden;
+}
+
+.empty-state {
+  padding: 40px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 14px;
 }
 
 .filters-bar {
@@ -459,13 +510,6 @@ onMounted(() => {
 .stat-spacer { flex: 1; }
 .stat-total { font-size: 16px; }
 
-.empty-state {
-  padding: 40px;
-  text-align: center;
-  color: #94a3b8;
-  font-size: 14px;
-}
-
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -519,6 +563,34 @@ onMounted(() => {
   gap: 20px;
 }
 
+.modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.modal-footer-total {
+  font-size: 14px;
+  color: #334155;
+}
+
+.total-paye-blue {
+  font-size: 16px;
+  color: #2563eb;
+  margin-left: 6px;
+}
+
+.btn-cancel {
+  padding: 8px 16px;
+  border: 1px solid #cbd5e1;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
 .detail-section {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -561,9 +633,7 @@ onMounted(() => {
   align-items: center;
 }
 
-.financial-value {
-  font-size: 16px;
-}
+.financial-value { font-size: 16px; }
 
 .trimestre-list {
   display: flex;
@@ -578,16 +648,14 @@ onMounted(() => {
   font-size: 13px;
 }
 
-.trimestre-count, .trimestre-du {
-  color: #64748b;
-}
+.trimestre-count, 
+.trimestre-du { color: #64748b; }
 
 .trimestre-total {
   font-size: 13px;
   color: #0f172a;
 }
 
-/* HISTORIQUE ET LÉGENDE DE SÉANCES */
 .history-table {
   display: flex;
   flex-direction: column;
@@ -605,11 +673,7 @@ onMounted(() => {
   color: #334155;
 }
 
-.col-header {
-  display: flex;
-  align-items: center;
-}
-
+.col-header { display: flex; align-items: center; }
 .date-col { flex: 1.2; }
 .tarif-col { flex: 1; justify-content: center; text-align: center; }
 .paye-col { flex: 1; text-align: right; justify-content: flex-end; }
@@ -631,43 +695,9 @@ onMounted(() => {
   border: 1px solid #cbd5e1;
 }
 
-.history-col {
-  display: flex;
-  flex-direction: column;
-}
-
-.history-date, .history-montant {
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.history-trimestre, .history-pay {
-  font-size: 11px;
-  color: #64748b;
-}
-
-.tarif-col {
-  flex-direction: row;
-  align-items: center;
-  gap: 4px;
-}
-
-.input-tarif {
-  width: 65px;
-  padding: 4px 6px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  text-align: right;
-  font-weight: 600;
-  font-size: 13px;
-  color: #0f172a;
-}
-
-.currency-symbol {
-  font-size: 13px;
-  font-weight: 600;
-  color: #475569;
-}
+.history-col { display: flex; flex-direction: column; }
+.history-date, .history-montant { font-weight: 700; color: #0f172a; }
+.history-trimestre, .history-pay { font-size: 11px; color: #64748b; }
 
 .empty-history {
   font-size: 13px;
@@ -675,39 +705,65 @@ onMounted(() => {
   font-style: italic;
 }
 
-.modal-footer {
+.tarif-display-wrapper {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  border-top: 1px solid #e2e8f0;
-  background: #f8fafc;
+  justify-content: center;
+  gap: 6px;
 }
 
-.modal-footer-total {
-  font-size: 14px;
-  color: #334155;
-}
-.total-paye-blue {
-  font-size: 16px;
-  color: #2563eb;
-  margin-left: 6px;
+.tarif-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
 }
 
-.btn-cancel {
-  padding: 8px 16px;
-  border: 1px solid #cbd5e1;
-  background: white;
-  border-radius: 6px;
+.btn-icon-edit {
+  background: none;
+  border: none;
   cursor: pointer;
+  font-size: 12px;
+  padding: 2px;
+  opacity: 0.6;
+  transition: opacity 0.15s, transform 0.15s;
 }
 
-/* Styles et masquage des flèches pour .input-tarif */
+.btn-icon-edit:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.edit-input-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-icon-validate {
+  background: #22c55e;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.btn-icon-validate:hover {
+  background: #16a34a;
+}
+
+/* Masquage des flèches des inputs numériques tout en conservant le comportement clavier */
 .input-tarif {
   -webkit-appearance: none;
-  appearance: none;
-  -moz-appearance: textfield; /* Firefox */
-  width: 65px;
+  appearance: textfield;
+  -moz-appearance: textfield;
+  width: 55px;
   padding: 4px 6px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
@@ -717,10 +773,21 @@ onMounted(() => {
   color: #0f172a;
 }
 
-.input-tarif::-webkit-outer-spin-button,
-.input-tarif::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+.input-tarif.is-editable {
+  border-color: #2563eb;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
 }
 
+.input-tarif::-webkit-inner-spin-button, 
+.input-tarif::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+
+.currency-symbol {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
 </style>
