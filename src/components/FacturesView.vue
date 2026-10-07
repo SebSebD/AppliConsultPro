@@ -18,22 +18,43 @@
 
       <hr class="divider" />
 
-      <!-- 2. Sélection du Patient -->
+      <!-- 2. Sélection du Patient (MODIFIÉ ICI) -->
       <div class="section-block">
         <h3>Patient</h3>
         <div class="form-row gap-16">
+          
+          <!-- Menu déroulant existant -->
           <select v-model="patientSelectionneId" @change="onPatientSelect" class="form-input flex-1">
             <option :value="null">— Sélectionner dans la liste —</option>
             <option v-for="pat in patients" :key="pat.id" :value="pat.id">
               {{ pat.nom }} {{ pat.prenom }}
             </option>
           </select>
-          <input 
-            type="text" 
-            v-model="recherchePatient" 
-            placeholder="Saisir ou modifier un nom..." 
-            class="form-input flex-1" 
-          />
+
+          <!-- Zone de saisie avec autocomplétion -->
+          <div class="autocomplete-wrapper flex-1">
+            <input 
+              type="text" 
+              v-model="recherchePatient" 
+              placeholder="Saisir ou modifier un nom..." 
+              class="form-input" 
+              style="width: 100%; box-sizing: border-box;"
+              @focus="afficherSuggestions = true"
+              @blur="cacherSuggestions"
+            />
+            
+            <!-- Liste déroulante des suggestions -->
+            <ul v-if="afficherSuggestions && suggestions.length > 0" class="suggestions-list">
+              <li 
+                v-for="p in suggestions" 
+                :key="p.id" 
+                @mousedown.prevent="choisirSuggestion(p)"
+              >
+                {{ p.nom }} {{ p.prenom }}
+              </li>
+            </ul>
+          </div>
+
         </div>
 
         <!-- Informations Récupérées du Patient -->
@@ -134,7 +155,7 @@
         </div>
 
         <div class="info-box">
-          <p><strong>{{ proNom }}</strong> - {{ proFonction }}</p>
+          <p><strong>{{ proNom }}</strong> {{ proFonction }}</p>
           <p>{{ proAdresse }}</p>
           <p>{{ proTelephone }}</p>
           <p>{{ proEmail }}</p>
@@ -243,7 +264,7 @@
       </div>
     </div>
 
-    <!-- MODALE : APERÇU / IMPRESSION PDF (Strict A4 Format) -->
+    <!-- MODALE : APERÇU / IMPRESSION PDF -->
     <div v-if="afficherFenetreVisualisation" class="modal-backdrop overflow-auto">
       <div class="modal-box preview-modal-box">
         <header class="modal-header no-print">
@@ -273,7 +294,7 @@
             <!-- Double bloc Émetteur / Destinataire -->
             <div class="a4-grid-2col">
               <div class="a4-col-box">
-                <p><strong>{{ proNom }}</strong> - {{ proFonction }}</p>
+                <p><strong>{{ proNom }}</strong> {{ proFonction }}</p>
                 <p>{{ proAdresse }}</p>
                 <p>Tel : {{ proTelephone }}</p>
                 <p>e-mail : {{ proEmail }}</p>
@@ -352,13 +373,13 @@
       </div>
     </div>
   </div>
-</template> 
+</template>
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { db } from '../db.js'
 
-// 1. Déclaration de la prop projectId transmise par le composant parent
+// 1. Déclaration de la prop projectId
 const props = defineProps({
   projectId: {
     type: [Number, String],
@@ -369,6 +390,30 @@ const props = defineProps({
 const patients = ref([])
 const patientSelectionneId = ref(null)
 const recherchePatient = ref('')
+
+// Gestion de l'aide à la saisie (suggestions)
+const afficherSuggestions = ref(false)
+
+const suggestions = computed(() => {
+  const query = recherchePatient.value.trim().toLowerCase()
+  if (!query) return []
+  return patients.value.filter(p => {
+    const nom = (p.nom || '').toLowerCase()
+    const prenom = (p.prenom || '').toLowerCase()
+    const nomComplet = `${nom} ${prenom}`
+    // Filtre si le nom, le prénom ou le nom complet commence par la recherche
+    return nom.startsWith(query) || prenom.startsWith(query) || nomComplet.startsWith(query)
+  })
+})
+
+const choisirSuggestion = (patient) => {
+  recherchePatient.value = `${patient.nom} ${patient.prenom}`
+  afficherSuggestions.value = false
+}
+
+const cacherSuggestions = () => {
+  afficherSuggestions.value = false
+}
 
 const numeroFacture = ref('FAC-' + String(Math.floor(Math.random() * 9000) + 1000))
 const dateEmission = ref(new Date().toISOString().substring(0, 10))
@@ -421,7 +466,7 @@ const nouvelleDescriptionTexte = ref('')
 const descriptionEnEdition = ref(null)
 const texteModifie = ref('')
 
-// 2. Charger les patients du projet actif depuis Dexie IndexedDB
+// Charger les patients du projet actif depuis Dexie IndexedDB
 const chargerPatients = async () => {
   const tousLesPatients = await db.patients.toArray()
   patients.value = tousLesPatients.filter(p => p.projectId === props.projectId)
@@ -465,7 +510,6 @@ const handleDescriptionSelectChange = (event, index) => {
   if (val === '__CREER_NOUVELLE__') {
     indexLigneEnEditionDescription.value = index
     afficherModalCreationDescription.value = true
-    // Rétablir la valeur précédente temporairement
     lignesFacture.value[index].description = descriptionsPredefinies.value[0]
   } else if (val === '__GERER__') {
     afficherModalGestionDescriptions.value = true
@@ -538,11 +582,12 @@ const imprimerA4 = () => {
   window.print()
 }
 
-// 3. Réinitialisation des champs et rechargement des patients lors du changement de projet
+// Réinitialisation des champs et rechargement des patients lors du changement de projet
 watch(() => props.projectId, () => {
   recherchePatient.value = ''
   patientSelectionneId.value = null
   afficherFenetreVisualisation.value = false
+  afficherSuggestions.value = false
   chargerPatients()
 })
 
@@ -553,7 +598,7 @@ onMounted(() => {
 
 <style scoped>
 /* ==========================================
-   1. STRUCTURE & CONTENEURS GLOBAUX
+1. STRUCTURE & CONTENEURS GLOBAUX
    ========================================== */
 .factures-container {
   padding-bottom: 80px;
@@ -594,7 +639,7 @@ onMounted(() => {
 }
 
 /* ==========================================
-   2. FORMULAIRES & INPUTS
+   2. FORMULAIRES, INPUTS & AUTOCOMPLÉTION
    ========================================== */
 .form-group {
   display: flex;
@@ -608,6 +653,22 @@ onMounted(() => {
   color: #64748b;
 }
 
+.form-input {
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1e293b;
+  background-color: #ffffff;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.form-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
 .text-center {
   text-align: center;
   text-align-last: center;
@@ -617,7 +678,51 @@ onMounted(() => {
 input[type=number]::-webkit-inner-spin-button, 
 input[type=number]::-webkit-outer-spin-button { 
   -webkit-appearance: none; 
+  appearance: none; 
   margin: 0; 
+}
+
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+/* Menu déroulant de suggestions (Autocomplétion Patient) */
+.autocomplete-wrapper {
+  position: relative;
+}
+
+.suggestions-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  margin-top: 4px;
+  padding: 0;
+  list-style: none;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 50;
+}
+
+.suggestions-list li {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.suggestions-list li:last-child {
+  border-bottom: none;
+}
+
+.suggestions-list li:hover {
+  background-color: #f1f5f9;
+  color: #2563eb;
 }
 
 /* ==========================================
@@ -736,6 +841,26 @@ input[type=number]::-webkit-outer-spin-button {
 /* ==========================================
    6. BOUTONS
    ========================================== */
+.btn-primary {
+  padding: 8px 16px;
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background-color: #1d4ed8;
+}
+
+.btn-primary:disabled {
+  background-color: #94a3b8;
+  cursor: not-allowed;
+}
+
 .btn-secondary {
   padding: 6px 12px;
   background-color: #ffffff;
@@ -780,6 +905,7 @@ input[type=number]::-webkit-outer-spin-button {
   border: none;
   border-radius: 4px;
   font-size: 12px;
+  cursor: pointer;
 }
 
 .btn-secondary-sm {
@@ -788,6 +914,7 @@ input[type=number]::-webkit-outer-spin-button {
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   font-size: 12px;
+  cursor: pointer;
 }
 
 .btn-danger-sm {
@@ -796,9 +923,73 @@ input[type=number]::-webkit-outer-spin-button {
   cursor: pointer;
 }
 
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #64748b;
+}
+
+.btn-close:hover {
+  color: #0f172a;
+}
+
 /* ==========================================
    7. MODALES & GESTION DES DESCRIPTIONS
    ========================================== */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-box {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  padding: 20px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 12px;
+}
+
+.modal-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+}
+
 .form-stack {
   display: flex;
   flex-direction: column;
@@ -1021,6 +1212,7 @@ input[type=number]::-webkit-outer-spin-button {
 .gap-10 { gap: 10px; }
 .mt-12 { margin-top: 12px; }
 .mt-6 { margin-top: 6px; }
+.overflow-auto { overflow: auto; }
 .flex-1 { flex: 1; }
 .flex-2 { flex: 2; }
 .w-200 { width: 200px; }

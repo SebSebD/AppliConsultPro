@@ -10,17 +10,88 @@ import UrssafView from './components/UrssafView.vue'
 
 // --- État d'authentification ---
 const isAuthenticated = ref(false)
+const requirePasswordOnLaunch = ref(localStorage.getItem('app_require_password_on_launch') === 'true')
+
+// --- Gestion du mot de passe ---
+const showPasswordModal = ref(false)
+const isOldPasswordVerified = ref(false) // Validation de l'ancien mot de passe
+const oldPasswordInput = ref('')
+const newPasswordInput = ref('')
+const passwordError = ref('')
+const passwordSuccess = ref('')
+
+// Visibilité des mots de passe (icône œil)
+const showOldPassword = ref(false)
+const showNewPassword = ref(false)
+
+const getCurrentPassword = () => {
+  return localStorage.getItem('app_password') || 'dodo'
+}
+
+const openChangePasswordModal = () => {
+  oldPasswordInput.value = ''
+  newPasswordInput.value = ''
+  isOldPasswordVerified.value = false
+  passwordError.value = ''
+  passwordSuccess.value = ''
+  showOldPassword.value = false
+  showNewPassword.value = false
+  showPasswordModal.value = true
+}
+
+// 1. Vérification immédiate de l'ancien mot de passe via le bouton ✔
+const verifyOldPassword = () => {
+  passwordError.value = ''
+
+  if (!oldPasswordInput.value) {
+    passwordError.value = "Veuillez saisir votre mot de passe actuel."
+    return
+  }
+
+  if (oldPasswordInput.value !== getCurrentPassword()) {
+    passwordError.value = "L'ancien mot de passe est incorrect."
+    isOldPasswordVerified.value = false
+    return
+  }
+
+  // Si correct : aucun message d'erreur, et déblocage de la saisie du nouveau mot de passe
+  passwordError.value = ''
+  isOldPasswordVerified.value = true
+}
+
+// 2. Enregistrement du nouveau mot de passe (met à jour localStorage pour LockScreen.vue)
+const handlePasswordChange = () => {
+  passwordError.value = ''
+  passwordSuccess.value = ''
+
+  if (!newPasswordInput.value.trim()) {
+    passwordError.value = "Veuillez saisir un nouveau mot de passe."
+    return
+  }
+
+  // Mise à jour dans le localStorage
+  localStorage.setItem('app_password', newPasswordInput.value.trim())
+  passwordSuccess.value = "Mot de passe modifié avec succès !"
+
+  setTimeout(() => {
+    showPasswordModal.value = false
+  }, 2300)
+}
 
 const handleAuthenticated = () => {
   isAuthenticated.value = true
   localStorage.setItem('app_authenticated', 'true')
 }
 
+watch(requirePasswordOnLaunch, (newVal) => {
+  localStorage.setItem('app_require_password_on_launch', newVal.toString())
+})
+
 // --- État global de l'interface ---
 const currentTab = ref('accueil')
 const afficherPreferences = ref(false)
 const sidebarReduite = ref(false)
-const appKey = ref(0) // Utilisé pour forcer le rechargement des composants après restauration
+const appKey = ref(0)
 
 const sections = [
   { id: 'accueil', nom: 'Accueil', couleur: '#000000', description: "Vue d'ensemble et accès rapide" },
@@ -47,30 +118,24 @@ const showProjectListDropdown = ref(false)
 const showSavesModal = ref(false)
 
 const currentProjectSaves = ref([])
-const selectedSaveIds = ref([]) // IDs des sauvegardes cochées pour suppression
+const selectedSaveIds = ref([])
 
-// Animation temporaire du bouton de sauvegarde (2s)
 const isSavingBriefly = ref(false)
 const savedFeedbackName = ref('')
+let saveTimeout = null
 
-// Nom du projet actif
 const currentProjectName = computed(() => {
   const activeProject = projects.value.find(p => p.id === activeProjectId.value)
-  if (activeProject && (activeProject.name || activeProject.nom)) {
-    return activeProject.name || activeProject.nom
-  }
-  return 'Nom du projet'
+  return activeProject?.nom || 'Nom du projet'
 })
 
-// Formatage pour la liste des projets
 const projetsFormatted = computed(() => {
   return projects.value.map(p => ({
     id: p.id,
-    nom: p.name || p.nom || 'Nom du projet'
+    nom: p.nom || 'Nom du projet'
   }))
 })
 
-// Message de dernière sauvegarde effectuée (pour la vue Accueil)
 const lastSaveText = computed(() => {
   if (currentProjectSaves.value.length === 0) {
     return 'Aucune sauvegarde effectuée pour ce projet'
@@ -81,25 +146,25 @@ const lastSaveText = computed(() => {
   }
   const d = new Date(latest.id)
   const pad = (n) => n.toString().padStart(2, '0')
-  const formatted = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} à ${pad(d.getHours())}h${pad(d.getMinutes())}`
+  const formatted = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} à ${pad(d.getHours())}h${pad(d.getMinutes())}`
   return `Dernière sauvegarde effectuée le ${formatted}`
 })
 
-// Chargement des sauvegardes du projet actif
 const loadProjectSaves = () => {
   if (!activeProjectId.value) return
   const savesStr = localStorage.getItem(`appli_saves_${activeProjectId.value}`)
   if (savesStr) {
     try {
       currentProjectSaves.value = JSON.parse(savesStr).sort((a, b) => b.id - a.id)
-    } catch(e) { currentProjectSaves.value = [] }
+    } catch (e) {
+      currentProjectSaves.value = []
+    }
   } else {
     currentProjectSaves.value = []
   }
   selectedSaveIds.value = []
 }
 
-// Restauration de la sauvegarde la plus récente lors du changement de projet
 const loadLatestSave = () => {
   if (currentProjectSaves.value.length > 0) {
     const latest = currentProjectSaves.value[0]
@@ -109,17 +174,16 @@ const loadLatestSave = () => {
   }
 }
 
-// Créer une sauvegarde manuelle
 const effectuerSauvegarde = () => {
   if (!activeProjectId.value) return
-  
+
   const id = activeProjectId.value
   const projName = currentProjectName.value
   const timestamp = Date.now()
-  
+
   const now = new Date()
   const pad = (n) => n.toString().padStart(2, '0')
-  const dateFormatted = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} à ${pad(now.getHours())}h${pad(now.getMinutes())}`
+  const dateFormatted = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} à ${pad(now.getHours())}h${pad(now.getMinutes())}`
   const saveName = `Copie de ${projName}-${dateFormatted}`
 
   const dataToSave = {}
@@ -139,27 +203,26 @@ const effectuerSauvegarde = () => {
   currentProjectSaves.value.unshift(newSave)
   localStorage.setItem(`appli_saves_${id}`, JSON.stringify(currentProjectSaves.value))
 
-  // Feedback visuel de 2 secondes
   savedFeedbackName.value = saveName
   isSavingBriefly.value = true
-  setTimeout(() => {
+
+  if (saveTimeout) clearTimeout(saveTimeout)
+  saveTimeout = setTimeout(() => {
     isSavingBriefly.value = false
     savedFeedbackName.value = ''
   }, 2000)
 }
 
-// Recharger une sauvegarde spécifique depuis la modale
 const rechargerSave = (save) => {
-  if (confirm(`Voulez-vous recharger "${save.name}" ? Toutes les modifications non sauvegardées seront perdues.`)) {
+  if (confirm(`Voulez-vous recharger « ${save.name} » ? Toutes les modifications non sauvegardées seront perdues.`)) {
     Object.keys(save.data).forEach(key => {
       localStorage.setItem(key, save.data[key])
     })
-    appKey.value++ // Force le rechargement visuel des composants
+    appKey.value++
     showSavesModal.value = false
   }
 }
 
-// --- GESTION DE LA SÉLECTION / SUPPRESSION DANS LA MODALE SAUVEGARDES ---
 const isAllSavesSelected = computed(() => {
   return currentProjectSaves.value.length > 0 && selectedSaveIds.value.length === currentProjectSaves.value.length
 })
@@ -175,8 +238,8 @@ const toggleSelectAllSaves = () => {
 const deleteSelectedSaves = () => {
   if (selectedSaveIds.value.length === 0) return
   const count = selectedSaveIds.value.length
-  const msg = count === 1 
-    ? "Voulez-vous vraiment supprimer la sauvegarde sélectionnée ?" 
+  const msg = count === 1
+    ? "Voulez-vous vraiment supprimer la sauvegarde sélectionnée ?"
     : `Voulez-vous vraiment supprimer les ${count} sauvegardes sélectionnées ?`
 
   if (confirm(msg)) {
@@ -187,8 +250,14 @@ const deleteSelectedSaves = () => {
 }
 
 onMounted(() => {
+  // Gestion du verrouillage d'accès au démarrage
+  const requirePassword = localStorage.getItem('app_require_password_on_launch') === 'true'
   const auth = localStorage.getItem('app_authenticated')
-  if (auth === 'true') {
+
+  if (requirePassword) {
+    isAuthenticated.value = false
+    localStorage.removeItem('app_authenticated')
+  } else if (auth === 'true') {
     isAuthenticated.value = true
   }
 
@@ -196,10 +265,14 @@ onMounted(() => {
   const savedActiveId = localStorage.getItem('appli_active_project_id')
 
   if (savedProjects) {
-    try { projects.value = JSON.parse(savedProjects) } 
-    catch (e) { projects.value = [{ id: Date.now(), name: 'Nom du projet' }] }
+    try {
+      const parsed = JSON.parse(savedProjects)
+      projects.value = parsed.map(p => ({ id: p.id, nom: p.nom || p.name || 'Nom du projet' }))
+    } catch (e) {
+      projects.value = [{ id: Date.now(), nom: 'Nom du projet' }]
+    }
   } else {
-    projects.value = [{ id: Date.now(), name: 'Nom du projet' }]
+    projects.value = [{ id: Date.now(), nom: 'Nom du projet' }]
   }
 
   if (savedActiveId && projects.value.some(p => p.id === Number(savedActiveId))) {
@@ -207,19 +280,22 @@ onMounted(() => {
   } else if (projects.value.length > 0) {
     activeProjectId.value = projects.value[0].id
   }
+
+  loadProjectSaves()
 })
 
-// Sauvegardes auto de la configuration des projets
 watch(projects, (newVal) => {
   localStorage.setItem('appli_projects', JSON.stringify(newVal))
 }, { deep: true })
 
-watch(activeProjectId, (newVal) => {
+watch(activeProjectId, (newVal, oldVal) => {
   if (newVal) {
     localStorage.setItem('appli_active_project_id', newVal.toString())
     loadProjectSaves()
-    loadLatestSave()
-    appKey.value++
+    if (oldVal !== undefined) {
+      loadLatestSave()
+      appKey.value++
+    }
   }
 })
 
@@ -244,7 +320,7 @@ const createProject = () => {
   const name = prompt("Nom du nouveau projet :", "Nouveau projet")
   if (name && name.trim()) {
     const newId = Date.now()
-    projects.value.push({ id: newId, name: name.trim() })
+    projects.value.push({ id: newId, nom: name.trim() })
     selectProject(newId)
   }
 }
@@ -252,10 +328,9 @@ const createProject = () => {
 const renameSpecificProject = (id) => {
   const proj = projects.value.find(p => p.id === id)
   if (!proj) return
-  const currentName = proj.name || proj.nom || "Nom du projet"
+  const currentName = proj.nom || "Nom du projet"
   const newName = prompt("Modifier le nom du projet :", currentName)
   if (newName && newName.trim()) {
-    proj.name = newName.trim()
     proj.nom = newName.trim()
   }
 }
@@ -263,11 +338,11 @@ const renameSpecificProject = (id) => {
 const duplicateProject = (id) => {
   const projToCopy = projects.value.find(p => p.id === id)
   if (!projToCopy) return
-  const currentName = projToCopy.name || projToCopy.nom || "Nom du projet"
+  const currentName = projToCopy.nom || "Nom du projet"
   const newId = Date.now()
   const newName = currentName + " (Copie)"
 
-  projects.value.push({ id: newId, name: newName })
+  projects.value.push({ id: newId, nom: newName })
 
   const keys = Object.keys(localStorage)
   keys.forEach(key => {
@@ -285,7 +360,7 @@ const removeSpecificProject = (id) => {
     alert("Vous devez conserver au moins un projet.")
     return
   }
-  
+
   if (confirm("Attention cette action est irréversible, toutes les données seront perdues.")) {
     projects.value = projects.value.filter(p => p.id !== id)
     const keys = Object.keys(localStorage)
@@ -302,19 +377,31 @@ const removeSpecificProject = (id) => {
 
 // --- GESTION DU SWIPE ---
 let touchStartX = 0
+let touchStartY = 0
 let touchEndX = 0
+let touchEndY = 0
 
-const handleTouchStart = (e) => { touchStartX = e.changedTouches[0].screenX }
+const handleTouchStart = (e) => {
+  touchStartX = e.changedTouches[0].screenX
+  touchStartY = e.changedTouches[0].screenY
+}
+
 const handleTouchEnd = (e) => {
   touchEndX = e.changedTouches[0].screenX
+  touchEndY = e.changedTouches[0].screenY
   gererSwipe()
 }
 
 const gererSwipe = () => {
-  const seuilSwipe = 50
+  const seuilX = 50
+  const toleranceY = 80
   const deltaX = touchEndX - touchStartX
-  if (deltaX < -seuilSwipe) sidebarReduite.value = true
-  else if (deltaX > seuilSwipe) sidebarReduite.value = false
+  const deltaY = Math.abs(touchEndY - touchStartY)
+
+  if (deltaY < toleranceY) {
+    if (deltaX < -seuilX) sidebarReduite.value = true
+    else if (deltaX > seuilX) sidebarReduite.value = false
+  }
 }
 </script>
 
@@ -380,8 +467,8 @@ const gererSwipe = () => {
           <p v-if="currentTab !== 'accueil'" class="top-bar-sub">{{ sectionActuelle?.description }}</p>
         </div>
       </header>
-      
-<section class="content-body">
+
+      <section class="content-body">
         <AccueilView 
           v-if="currentTab === 'accueil'" 
           :project-id="activeProjectId" 
@@ -405,10 +492,8 @@ const gererSwipe = () => {
           <h3>📂 Gestion du Projet</h3>
           <button @click="showProjectModal = false" class="btn-close">✕</button>
         </header>
-        
+
         <div class="current-project-view">
-          
-          <!-- Bloc Projet Actif -->
           <div class="project-active-header-box">
             <span class="project-large-name" :title="currentProjectName">{{ currentProjectName }}</span>
             <div class="project-actions-group">
@@ -416,7 +501,6 @@ const gererSwipe = () => {
             </div>
           </div>
 
-          <!-- Actions de sauvegarde sous le projet actif -->
           <div class="project-saves-actions">
             <button 
               v-if="!isSavingBriefly" 
@@ -426,7 +510,6 @@ const gererSwipe = () => {
               💾 Effectuer une sauvegarde
             </button>
 
-            <!-- Feedback temporaire 2 secondes -->
             <div v-else class="save-feedback-box" :title="savedFeedbackName">
               ✅ {{ savedFeedbackName }}
             </div>
@@ -435,7 +518,7 @@ const gererSwipe = () => {
           </div>
 
           <button @click="createProject" class="btn-primary new-project-btn" style="margin-top: 10px;">+ Nouveau Projet</button>
-          
+
           <button @click="showProjectListDropdown = !showProjectListDropdown" class="btn-list-projects">
             📋 Liste des projets {{ showProjectListDropdown ? '▲' : '▼' }}
           </button>
@@ -483,7 +566,7 @@ const gererSwipe = () => {
           <div v-if="currentProjectSaves.length === 0" class="empty-state">
             Aucune sauvegarde pour ce projet.
           </div>
-          
+
           <table v-else class="saves-table">
             <thead>
               <tr>
@@ -538,6 +621,20 @@ const gererSwipe = () => {
             <label>Stockage local</label>
             <p class="pref-desc">Vos données et sauvegardes manuelles sont enregistrées en toute sécurité dans la mémoire de votre navigateur.</p>
           </div>
+
+          <div class="pref-group pref-checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="requirePasswordOnLaunch" />
+              <span>Demander mon mot de passe à l'ouverture</span>
+            </label>
+            <p class="pref-desc">Si cette option est activée, le mot de passe vous sera demandé à chaque ouverture de l'application.</p>
+          </div>
+
+          <div class="pref-group pref-password-group">
+            <button @click="openChangePasswordModal" class="btn-secondary-action">
+              🔑 Modifier le mot de passe
+            </button>
+          </div>
         </div>
 
         <footer class="modal-footer">
@@ -545,10 +642,99 @@ const gererSwipe = () => {
         </footer>
       </div>
     </div>
+
+<!-- FENÊTRE DE MODIFICATION DU MOT DE PASSE (UNIQUE VUE) -->
+    <div v-if="showPasswordModal" class="modal-backdrop" style="z-index: 110;">
+      <div class="modal-box password-modal">
+        <header class="modal-header">
+          <h3>🔑 Modifier le mot de passe</h3>
+          <button type="button" @click="showPasswordModal = false" class="btn-close">✕</button>
+        </header>
+
+        <form @submit.prevent="handlePasswordChange" class="password-body" style="padding: 16px 0;">
+          
+          <!-- Mot de passe actuel + Œil + Petit bouton carré vert ✔ -->
+          <div class="input-group">
+            <label>Mot de passe actuel</label>
+            <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+              <input 
+                :type="showOldPassword ? 'text' : 'password'" 
+                v-model="oldPasswordInput" 
+                placeholder="Mot de passe actuel"
+                :disabled="isOldPasswordVerified"
+                @keyup.enter.prevent="verifyOldPassword"
+                style="flex: 1;"
+              />
+
+              <!-- Bouton Œil (Ancien mot de passe) -->
+              <button 
+                type="button" 
+                @click.prevent="showOldPassword = !showOldPassword" 
+                style="width: 36px; height: 36px; min-width: 36px; background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px;"
+                :title="showOldPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'"
+              >
+                {{ showOldPassword ? '🙈' : '👁️' }}
+              </button>
+
+              <!-- Petit bouton carré vert ✔ -->
+              <button 
+                type="button" 
+                @click.prevent="verifyOldPassword" 
+                :disabled="isOldPasswordVerified"
+                style="width: 36px; height: 36px; min-width: 36px; background-color: #16a34a; color: white; border: none; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px;"
+                :style="{ opacity: isOldPasswordVerified ? 0.6 : 1, cursor: isOldPasswordVerified ? 'not-allowed' : 'pointer' }"
+                title="Vérifier le mot de passe actuel"
+              >
+                ✔
+              </button>
+            </div>
+          </div>
+
+          <!-- Nouveau mot de passe + Œil -->
+          <div class="input-group" style="margin-top: 14px;">
+            <label>Nouveau mot de passe</label>
+            <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+              <input 
+                :type="showNewPassword ? 'text' : 'password'" 
+                v-model="newPasswordInput" 
+                placeholder="Entrez le nouveau mot de passe"
+                required 
+                style="flex: 1;"
+              />
+
+              <!-- Bouton Œil (Nouveau mot de passe) -->
+              <button 
+                type="button" 
+                @click.prevent="showNewPassword = !showNewPassword" 
+                style="width: 36px; height: 36px; min-width: 36px; background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px;"
+                :title="showNewPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'"
+              >
+                {{ showNewPassword ? '🙈' : '👁️' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Messages d'erreur et de succès -->
+          <p v-if="passwordError" class="password-msg error" style="color: #dc2626; margin-top: 8px; font-size: 13px;">
+            {{ passwordError }}
+          </p>
+          <p v-if="passwordSuccess" class="password-msg success" style="color: #16a34a; margin-top: 8px; font-size: 13px;">
+            {{ passwordSuccess }}
+          </p>
+
+          <footer class="modal-footer" style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 8px;">
+            <button type="button" @click="showPasswordModal = false" class="btn-secondary-action">Annuler</button>
+            <button type="submit" class="btn-primary">Valider</button>
+          </footer>
+        </form>
+      </div>
+    </div>
+
   </div>
 </template>
 
 <style>
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -752,7 +938,6 @@ html, body, #app {
   margin-top: 2px;
 }
 
-/* Information Dernière Sauvegarde (Top Bar) */
 .top-bar-right {
   display: flex;
   align-items: center;
@@ -1117,6 +1302,79 @@ html, body, #app {
   font-size: 13px;
   color: #64748b;
   line-height: 1.4;
+}
+
+.pref-checkbox-group {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.pref-password-group {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #334155;
+  font-size: 14px;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+/* Modale Mot de Passe */
+.password-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.input-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.input-group input {
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.input-group input:focus {
+  border-color: #2563eb;
+}
+
+.password-msg {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.password-msg.error {
+  color: #dc2626;
+}
+
+.password-msg.success {
+  color: #16a34a;
 }
 
 .modal-footer {

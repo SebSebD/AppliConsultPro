@@ -5,19 +5,34 @@ const emit = defineEmits(['authenticated'])
 const password = ref('')
 const error = ref(false)
 
-// 🔑 Mot de passe global
-const CORRECT_PASSWORD = 'dodo' 
+// Récupération dynamique du mot de passe actuel ('dodo' par défaut)
+const getCurrentPassword = () => {
+  return localStorage.getItem('app_password') || 'dodo'
+}
 
-// Réinitialise l'erreur dès que l'utilisateur retape quelque chose
+// Réinitialise l'erreur dès que l'utilisateur tape du texte
 watch(password, () => {
   if (error.value) error.value = false
 })
 
 const handleLogin = () => {
-  if (password.value.trim() === CORRECT_PASSWORD) {
+  const currentPassword = getCurrentPassword()
+
+  if (password.value.trim() === currentPassword) {
     error.value = false
-    // Stockage de l'authentification globale
-    localStorage.setItem('app_authenticated', 'true')
+
+    // Vérification de la préférence système
+    const demanderAChaqueOuverture = localStorage.getItem('ask_password_on_launch') === 'true'
+
+    if (demanderAChaqueOuverture) {
+      // Stockage temporaire (session en cours)
+      sessionStorage.setItem('app_authenticated', 'true')
+      localStorage.removeItem('app_authenticated')
+    } else {
+      // Stockage permanent
+      localStorage.setItem('app_authenticated', 'true')
+    }
+
     // Notification du composant parent
     emit('authenticated')
     password.value = ''
