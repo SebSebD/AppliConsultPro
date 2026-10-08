@@ -437,10 +437,7 @@ const restaurerDonneesEnBase = async (dataMap, targetProjectId) => {
 const demanderOptionRenommage = (nomParDefaut, actionLibelle) => {
   const nomSaisi = prompt(`Nom du projet à ${actionLibelle} :`, nomParDefaut)
 
-  // Clic sur "Annuler" -> Retour en arrière (abandon)
   if (nomSaisi === null) return null
-
-  // Si le champ est vidé, on garde le nom par défaut, sinon on prend le nouveau nom
   return nomSaisi.trim() || nomParDefaut
 }
 
@@ -456,9 +453,8 @@ const duplicateProject = async (id) => {
 
   const nomPropose = `Copie de ${projOriginal.nom || 'Projet'}`
 
-  // Demande selon le flux Oui / Non / Annuler
   const nomFinal = demanderOptionRenommage(nomPropose, "dupliqué")
-  if (nomFinal === null) return // Annuler = Abandon de la duplication
+  if (nomFinal === null) return
 
   const newId = Date.now()
   const dataMap = await extraireDonneesProjet(targetId)
@@ -471,8 +467,34 @@ const duplicateProject = async (id) => {
 const dupliquerProjet = duplicateProject
 
 // ==========================================
-// 9. EXPORTATION ET IMPORTATION (CSV / JSON)
+// 9. EXPORTATION ET IMPORTATION SUR MESURE
 // ==========================================
+
+// États de la modale d'importation
+const showImportModal = ref(false)
+const importData = ref(null) // Contenu complet extrait du fichier
+const importProjectName = ref('Projet Importé')
+const importOption = ref('full') // 'full' ou 'patients'
+const selectedPatientIds = ref([])
+
+// Extrait la liste des patients disponibles dans le fichier chargé
+const patientsImportables = computed(() => {
+  if (!importData.value) return []
+  return importData.value.patients || []
+})
+
+// Gestion du "Tout sélectionner / Tout décocher" pour les patients
+const isAllPatientsSelected = computed({
+  get: () => patientsImportables.value.length > 0 && selectedPatientIds.value.length === patientsImportables.value.length,
+  set: (val) => {
+    if (val) {
+      selectedPatientIds.value = patientsImportables.value.map(p => p.id)
+    } else {
+      selectedPatientIds.value = []
+    }
+  }
+})
+
 const escapeCsvValue = (val) => {
   if (val === null || val === undefined) return '""'
   const str = String(val)
@@ -540,9 +562,8 @@ const exporterProjetJSON = async () => {
   const proj = projects.value.find(p => p.id === Number(id))
   const projNameOriginal = proj?.nom || 'Projet'
 
-  // Demande le nom selon le flux Oui / Non / Annuler
   const projNameExport = demanderOptionRenommage(projNameOriginal, "exporté")
-  if (projNameExport === null) return // Annuler = Abandon de l'exportation
+  if (projNameExport === null) return
 
   const data = await extraireDonneesProjet(id)
 
@@ -572,9 +593,8 @@ const exporterProjetCSV = async () => {
   const proj = projects.value.find(p => p.id === Number(id))
   const projNameOriginal = proj?.nom || 'Projet'
 
-  // Demande le nom selon le flux Oui / Non / Annuler
   const projNameExport = demanderOptionRenommage(projNameOriginal, "exporté")
-  if (projNameExport === null) return // Annuler = Abandon de l'exportation
+  if (projNameExport === null) return
 
   const data = await extraireDonneesProjet(id)
 
@@ -624,30 +644,45 @@ const importerFichierProjet = (event) => {
     const content = e.target.result
     try {
       if (file.name.endsWith('.json')) {
-        await traiterImportJSON(content)
+        await préchaufferImportJSON(content)
       } else if (file.name.endsWith('.csv')) {
-        await traiterImportCSV(content)
+        await préchaufferImportCSV(content)
       } else {
         alert("Format non supporté. Veuillez choisir un fichier .csv ou .json")
       }
     } catch (err) {
       console.error("Erreur d'importation :", err)
-      alert("Erreur lors de l'importation. Le fichier est invalide ou corrompu.")
+      alert("Erreur lors de la lecture du fichier. Format invalide ou corrompu.")
+    } finally {
+      event.target.value = ''
     }
   }
   reader.readAsText(file, 'UTF-8')
 }
 
-const traiterImportJSON = async (jsonStr) => {
+// Prépare les données JSON et ouvre la modale
+const préchaufferImportJSON = async (jsonStr) => {
   const payload = JSON.parse(jsonStr)
-  if (!payload.nom || !payload.data) {
+  const dataMap = payload.data || payload
+
+  if (!dataMap || typeof dataMap !== 'object') {
     alert("Fichier JSON invalide : structure incomplète.")
     return
   }
-  await restaurerProjetImporte(payload.nom, payload.data)
+
+  importProjectName.value = payload.nom || 'Projet Importé'
+  importData.value = dataMap
+  importOption.value = 'full'
+
+  // Sélectionne par défaut tous les patients pour l'option sectorielle
+  const patients = dataMap.patients || []
+  selectedPatientIds.value = patients.map(p => p.id)
+
+  showImportModal.value = true
 }
 
-const traiterImportCSV = async (csvStr) => {
+// Prépare les données CSV et ouvre la modale
+const préchaufferImportCSV = async (csvStr) => {
   const cleanCsv = csvStr.replace(/^\uFEFF/, '')
   const lines = cleanCsv.split(/\r?\n/)
 
@@ -688,9 +723,55 @@ const traiterImportCSV = async (csvStr) => {
     }
   }
 
-  await restaurerProjetImporte(importedName, data)
+  importProjectName.value = importedName
+  importData.value = data
+  importOption.value = 'full'
+
+  const patients = data.patients || []
+  selectedPatientIds.value = patients.map(p => p.id)
+
+  showImportModal.value = true
 }
 
+// Valide le choix d'import depuis la modale
+const validerImportation = async () => {
+  if (!importData.value) return
+
+  if (importOption.value === 'full') {
+    // 1. IMPORT DU PROJET COMPLET
+    await restaurerProjetImporte(importProjectName.value, importData.value)
+  } else {
+    // 2. IMPORT SECTORIEL (Fiches patients uniquement)
+    if (!activeProjectId.value) {
+      return alert("Aucun projet actif sélectionné pour recevoir les fiches.")
+    }
+
+    if (selectedPatientIds.value.length === 0) {
+      return alert("Veuillez sélectionner au moins une fiche patient à importer.")
+    }
+
+    const patientsFiltrés = patientsImportables.value.filter(p =>
+      selectedPatientIds.value.includes(p.id)
+    )
+
+    await ajouterPatientsAuProjet(activeProjectId.value, patientsFiltrés)
+    alert(`${patientsFiltrés.length} fiche(s) patient(s) importée(s) avec succès dans le projet actuel !`)
+    appKey.value++ // Rafraîchit l'interface
+  }
+
+  fermerModalImport()
+}
+
+// Ajoute uniquement une liste de patients dans le projet cible
+const ajouterPatientsAuProjet = async (targetProjectId, patientsList) => {
+  for (const p of patientsList) {
+    const { id, ...patientData } = p
+    patientData.projectId = targetProjectId
+    await db.patients.add(patientData)
+  }
+}
+
+// Restaure un projet entier comme nouveau projet
 const restaurerProjetImporte = async (nomProjet, dataMap) => {
   const newId = Date.now()
   const nomFinal = `${nomProjet} (Importé)`
@@ -701,6 +782,12 @@ const restaurerProjetImporte = async (nomProjet, dataMap) => {
   selectProject(newId)
 
   alert(`Le projet « ${nomFinal} » a été importé avec succès avec toutes ses données !`)
+}
+
+const fermerModalImport = () => {
+  showImportModal.value = false
+  importData.value = null
+  selectedPatientIds.value = []
 }
 
 // ==========================================
@@ -872,7 +959,7 @@ const gererSwipe = () => {
             </div>
           </div>
 
-          <!-- === SECTION EXPORT / IMPORT (Tout en bas) === -->
+          <!-- === SECTION EXPORT / IMPORT === -->
           <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;" />
 
           <div class="export-import-section">
@@ -922,6 +1009,117 @@ const gererSwipe = () => {
           </div>
 
         </div>
+      </div>
+    </div>
+
+    <!-- MODALE SUR MESURE : OPTION D'IMPORTATION -->
+    <div v-if="showImportModal" class="modal-backdrop" style="z-index: 120;">
+      <div class="modal-box import-modal" style="max-width: 520px; width: 90%;">
+        <header class="modal-header">
+          <h3>📤 Choix de l'importation</h3>
+          <button @click="fermerModalImport" class="btn-close">✕</button>
+        </header>
+
+        <div class="modal-body" style="padding: 16px 0;">
+          <p style="margin-bottom: 16px; font-size: 14px; color: #475569;">
+            Fichier détecté : <strong>{{ importProjectName }}</strong>
+          </p>
+
+          <div class="import-options-group" style="display: flex; flex-direction: column; gap: 12px;">
+            <!-- Option 1 : Projet complet -->
+            <label 
+              class="import-option-card"
+              :style="{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '12px',
+                padding: '12px',
+                border: '1px solid',
+                borderColor: importOption === 'full' ? '#2563eb' : '#cbd5e1',
+                borderRadius: '8px',
+                backgroundColor: importOption === 'full' ? '#eff6ff' : '#ffffff',
+                cursor: 'pointer'
+              }"
+            >
+              <input type="radio" v-model="importOption" value="full" style="margin-top: 3px;" />
+              <div>
+                <strong style="display: block; font-size: 14px; color: #0f172a;">Importer tout le projet</strong>
+                <span style="font-size: 12px; color: #64748b;">
+                  Crée un nouveau projet indépendant contenant les patients, séances et factures.
+                </span>
+              </div>
+            </label>
+
+            <!-- Option 2 : Fiches patients sectorielles -->
+            <label 
+              class="import-option-card"
+              :style="{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '12px',
+                padding: '12px',
+                border: '1px solid',
+                borderColor: importOption === 'patients' ? '#2563eb' : '#cbd5e1',
+                borderRadius: '8px',
+                backgroundColor: importOption === 'patients' ? '#eff6ff' : '#ffffff',
+                cursor: 'pointer'
+              }"
+            >
+              <input type="radio" v-model="importOption" value="patients" style="margin-top: 3px;" />
+              <div>
+                <strong style="display: block; font-size: 14px; color: #0f172a;">Sélection sur mesure des fiches patients</strong>
+                <span style="font-size: 12px; color: #64748b;">
+                  Fusionne uniquement les patients sélectionnés dans le projet actif actuel (« {{ currentProjectName }} »).
+                </span>
+              </div>
+            </label>
+          </div>
+
+          <!-- LISTE DES PATIENTS AVEC SÉLECTION MULTIPLE (Affichée uniquement si option "patients" active) -->
+          <div v-if="importOption === 'patients'" class="patients-selector-box" style="margin-top: 16px; border-top: 1px solid #e2e8f0; padding-top: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-weight: 600; font-size: 13px; color: #334155;">
+                Patients à importer ({{ selectedPatientIds.length }} / {{ patientsImportables.length }})
+              </span>
+              <label style="font-size: 12px; color: #2563eb; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                <input type="checkbox" v-model="isAllPatientsSelected" />
+                Tout sélectionner / décocher
+              </label>
+            </div>
+
+            <div 
+              v-if="patientsImportables.length > 0" 
+              class="patients-scroll-list"
+              style="max-height: 180px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px; background-color: #f8fafc;"
+            >
+              <div 
+                v-for="patient in patientsImportables" 
+                :key="patient.id"
+                style="display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid #f1f5f9;"
+              >
+                <input 
+                  type="checkbox" 
+                  :value="patient.id" 
+                  v-model="selectedPatientIds" 
+                  :id="'p-imp-' + patient.id"
+                />
+                <label :for="'p-imp-' + patient.id" style="font-size: 13px; cursor: pointer; flex: 1;">
+                  {{ patient.nom || '' }} {{ patient.prenom || '' }}
+                  <span v-if="patient.telephone" style="color: #94a3b8; font-size: 11px;">({{ patient.telephone }})</span>
+                </label>
+              </div>
+            </div>
+
+            <p v-else style="font-size: 12px; color: #ef4444; margin-top: 6px;">
+              Aucune fiche patient n'a été trouvée dans le fichier d'importation.
+            </p>
+          </div>
+        </div>
+
+        <footer class="modal-footer" style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+          <button @click="fermerModalImport" class="btn-secondary-action">Annuler</button>
+          <button @click="validerImportation" class="btn-primary">Valider l'importation</button>
+        </footer>
       </div>
     </div>
 
@@ -1033,7 +1231,6 @@ const gererSwipe = () => {
         </header>
 
         <form @submit.prevent="handlePasswordChange" class="password-body" style="padding: 16px 0;">
-          <!-- Mot de passe actuel + Œil + Bouton ✔ -->
           <div class="input-group">
             <label>Mot de passe actuel</label>
             <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
@@ -1068,7 +1265,6 @@ const gererSwipe = () => {
             </div>
           </div>
 
-          <!-- Nouveau mot de passe + Œil -->
           <div class="input-group" style="margin-top: 14px;">
             <label>Nouveau mot de passe</label>
             <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
@@ -1091,7 +1287,6 @@ const gererSwipe = () => {
             </div>
           </div>
 
-          <!-- Messages d'erreur et de succès -->
           <p v-if="passwordError" class="password-msg error" style="color: #dc2626; margin-top: 8px; font-size: 13px;">
             {{ passwordError }}
           </p>
@@ -1133,7 +1328,9 @@ html, body, #app {
   transition: all 0.2s ease;
 }
 
-/* Sidebar */
+/* ==========================================
+   Sidebar
+   ========================================== */
 .sidebar {
   width: 290px;
   background-color: #ffffff;
@@ -1281,7 +1478,9 @@ html, body, #app {
   text-overflow: ellipsis;
 }
 
-/* Zone principale */
+/* ==========================================
+   Zone principale (Main Content)
+   ========================================== */
 .main-content {
   flex: 1;
   display: flex;
@@ -1338,7 +1537,9 @@ html, body, #app {
   overflow-x: auto;
 }
 
-/* Modales */
+/* ==========================================
+   Modales & Overlays
+   ========================================== */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1355,7 +1556,7 @@ html, body, #app {
   border-radius: 12px;
   max-width: 520px;
   width: 90%;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   max-height: 85vh;
   display: flex;
   flex-direction: column;
@@ -1406,7 +1607,7 @@ html, body, #app {
   color: #64748b;
 }
 
-/* Projet Modal */
+/* Modale Projet */
 .current-project-view {
   display: flex;
   flex-direction: column;
@@ -1576,7 +1777,7 @@ html, body, #app {
   gap: 2px;
 }
 
-/* Modale Sauvegardes & Tableau par colonne */
+/* Modale Sauvegardes & Tableau */
 .saves-list-container {
   display: flex;
   flex-direction: column;
@@ -1655,7 +1856,7 @@ html, body, #app {
   background-color: #dbeafe;
 }
 
-/* Preferences Body */
+/* Modale Préférences */
 .preferences-body {
   display: flex;
   flex-direction: column;
@@ -1773,5 +1974,7 @@ html, body, #app {
   flex: 1;
 }
 
-.btn-primary:hover { background-color: #1d4ed8; }
+.btn-primary:hover { 
+  background-color: #1d4ed8; 
+}
 </style>
