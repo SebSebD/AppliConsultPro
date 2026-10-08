@@ -1,5 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { db } from './db.js' // Importation de la base Dexie / IndexedDB
+
 import LockScreen from './components/LockScreen.vue'
 import AccueilView from './components/AccueilView.vue'
 import PatientsView from './components/PatientsView.vue'
@@ -8,19 +10,19 @@ import SeancesView from './components/SeancesView.vue'
 import FacturesView from './components/FacturesView.vue'
 import UrssafView from './components/UrssafView.vue'
 
-// --- État d'authentification ---
+// ==========================================
+// 1. ÉTAT D'AUTHENTIFICATION ET SÉCURITÉ
+// ==========================================
 const isAuthenticated = ref(false)
 const requirePasswordOnLaunch = ref(localStorage.getItem('app_require_password_on_launch') === 'true')
 
-// --- Gestion du mot de passe ---
 const showPasswordModal = ref(false)
-const isOldPasswordVerified = ref(false) // Validation de l'ancien mot de passe
+const isOldPasswordVerified = ref(false)
 const oldPasswordInput = ref('')
 const newPasswordInput = ref('')
 const passwordError = ref('')
 const passwordSuccess = ref('')
 
-// Visibilité des mots de passe (icône œil)
 const showOldPassword = ref(false)
 const showNewPassword = ref(false)
 
@@ -39,7 +41,6 @@ const openChangePasswordModal = () => {
   showPasswordModal.value = true
 }
 
-// 1. Vérification immédiate de l'ancien mot de passe via le bouton ✔
 const verifyOldPassword = () => {
   passwordError.value = ''
 
@@ -54,12 +55,10 @@ const verifyOldPassword = () => {
     return
   }
 
-  // Si correct : aucun message d'erreur, et déblocage de la saisie du nouveau mot de passe
   passwordError.value = ''
   isOldPasswordVerified.value = true
 }
 
-// 2. Enregistrement du nouveau mot de passe (met à jour localStorage pour LockScreen.vue)
 const handlePasswordChange = () => {
   passwordError.value = ''
   passwordSuccess.value = ''
@@ -69,7 +68,6 @@ const handlePasswordChange = () => {
     return
   }
 
-  // Mise à jour dans le localStorage
   localStorage.setItem('app_password', newPasswordInput.value.trim())
   passwordSuccess.value = "Mot de passe modifié avec succès !"
 
@@ -87,11 +85,14 @@ watch(requirePasswordOnLaunch, (newVal) => {
   localStorage.setItem('app_require_password_on_launch', newVal.toString())
 })
 
-// --- État global de l'interface ---
+// ==========================================
+// 2. ÉTAT GLOBAL DE L'INTERFACE ET NAVIGATION
+// ==========================================
 const currentTab = ref('accueil')
 const afficherPreferences = ref(false)
 const sidebarReduite = ref(false)
 const appKey = ref(0)
+const fileInputRef = ref(null)
 
 const sections = [
   { id: 'accueil', nom: 'Accueil', couleur: '#000000', description: "Vue d'ensemble et accès rapide" },
@@ -110,7 +111,9 @@ const changerTab = (id) => {
   currentTab.value = id
 }
 
-// --- GESTION DES PROJETS ET SAUVEGARDES ---
+// ==========================================
+// 3. GESTION DES PROJETS ET ÉTAT DU STOCKAGE
+// ==========================================
 const projects = ref([])
 const activeProjectId = ref(null)
 const showProjectModal = ref(false)
@@ -123,6 +126,10 @@ const selectedSaveIds = ref([])
 const isSavingBriefly = ref(false)
 const savedFeedbackName = ref('')
 let saveTimeout = null
+
+const getActiveProjectId = () => {
+  return activeProjectId.value
+}
 
 const currentProjectName = computed(() => {
   const activeProject = projects.value.find(p => p.id === activeProjectId.value)
@@ -150,6 +157,27 @@ const lastSaveText = computed(() => {
   return `Dernière sauvegarde effectuée le ${formatted}`
 })
 
+// ==========================================
+// 4. MOTEUR D'EXTRACTION INDEXEDDB (DEXIE)
+// ==========================================
+
+// Extrait toutes les entités rattachées au projectId depuis la base Dexie
+const extraireDonneesProjet = async (targetId) => {
+  if (!targetId) return {}
+  const targetIdStr = String(targetId)
+  const data = {}
+
+  for (const table of db.tables) {
+    const allRecords = await table.toArray()
+    data[table.name] = allRecords.filter(item => item && String(item.projectId) === targetIdStr)
+  }
+
+  return data
+}
+
+// ==========================================
+// 5. HISTORIQUE DE SAUVEGARDES INTERNES
+// ==========================================
 const loadProjectSaves = () => {
   if (!activeProjectId.value) return
   const savesStr = localStorage.getItem(`appli_saves_${activeProjectId.value}`)
@@ -165,16 +193,7 @@ const loadProjectSaves = () => {
   selectedSaveIds.value = []
 }
 
-const loadLatestSave = () => {
-  if (currentProjectSaves.value.length > 0) {
-    const latest = currentProjectSaves.value[0]
-    Object.keys(latest.data).forEach(key => {
-      localStorage.setItem(key, latest.data[key])
-    })
-  }
-}
-
-const effectuerSauvegarde = () => {
+const effectuerSauvegarde = async () => {
   if (!activeProjectId.value) return
 
   const id = activeProjectId.value
@@ -186,12 +205,7 @@ const effectuerSauvegarde = () => {
   const dateFormatted = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} à ${pad(now.getHours())}h${pad(now.getMinutes())}`
   const saveName = `Copie de ${projName}-${dateFormatted}`
 
-  const dataToSave = {}
-  Object.keys(localStorage).forEach(key => {
-    if (key.includes(id.toString()) && !key.startsWith('appli_saves_')) {
-      dataToSave[key] = localStorage.getItem(key)
-    }
-  })
+  const dataToSave = await extraireDonneesProjet(id)
 
   const newSave = {
     id: timestamp,
@@ -213,11 +227,22 @@ const effectuerSauvegarde = () => {
   }, 2000)
 }
 
-const rechargerSave = (save) => {
+const rechargerSave = async (save) => {
   if (confirm(`Voulez-vous recharger « ${save.name} » ? Toutes les modifications non sauvegardées seront perdues.`)) {
-    Object.keys(save.data).forEach(key => {
-      localStorage.setItem(key, save.data[key])
-    })
+    const targetId = activeProjectId.value
+
+    // Supprimer les entités actuelles du projet dans IndexedDB
+    for (const table of db.tables) {
+      const all = await table.toArray()
+      const idsToDelete = all.filter(item => String(item.projectId) === String(targetId)).map(item => item.id)
+      if (idsToDelete.length > 0) {
+        await table.bulkDelete(idsToDelete)
+      }
+    }
+
+    // Ré-insérer depuis la sauvegarde
+    await restaurerDonneesEnBase(save.data, targetId)
+
     appKey.value++
     showSavesModal.value = false
   }
@@ -249,8 +274,10 @@ const deleteSelectedSaves = () => {
   }
 }
 
+// ==========================================
+// 6. LIFECYCLE ET WATCHERS
+// ==========================================
 onMounted(() => {
-  // Gestion du verrouillage d'accès au démarrage
   const requirePassword = localStorage.getItem('app_require_password_on_launch') === 'true'
   const auth = localStorage.getItem('app_authenticated')
 
@@ -267,7 +294,7 @@ onMounted(() => {
   if (savedProjects) {
     try {
       const parsed = JSON.parse(savedProjects)
-      projects.value = parsed.map(p => ({ id: p.id, nom: p.nom || p.name || 'Nom du projet' }))
+      projects.value = parsed.map(p => ({ id: Number(p.id), nom: p.nom || p.name || 'Nom du projet' }))
     } catch (e) {
       projects.value = [{ id: Date.now(), nom: 'Nom du projet' }]
     }
@@ -288,18 +315,17 @@ watch(projects, (newVal) => {
   localStorage.setItem('appli_projects', JSON.stringify(newVal))
 }, { deep: true })
 
-watch(activeProjectId, (newVal, oldVal) => {
+watch(activeProjectId, (newVal) => {
   if (newVal) {
     localStorage.setItem('appli_active_project_id', newVal.toString())
     loadProjectSaves()
-    if (oldVal !== undefined) {
-      loadLatestSave()
-      appKey.value++
-    }
+    appKey.value++
   }
 })
 
-// --- ACTIONS SUR LES PROJETS ---
+// ==========================================
+// 7. ACTIONS SUR LES PROJETS ET DUPLICATION
+// ==========================================
 const openProjectModal = () => {
   showProjectListDropdown.value = false
   showProjectModal.value = true
@@ -326,7 +352,7 @@ const createProject = () => {
 }
 
 const renameSpecificProject = (id) => {
-  const proj = projects.value.find(p => p.id === id)
+  const proj = projects.value.find(p => p.id === Number(id))
   if (!proj) return
   const currentName = proj.nom || "Nom du projet"
   const newName = prompt("Modifier le nom du projet :", currentName)
@@ -335,47 +361,351 @@ const renameSpecificProject = (id) => {
   }
 }
 
-const duplicateProject = (id) => {
-  const projToCopy = projects.value.find(p => p.id === id)
-  if (!projToCopy) return
-  const currentName = projToCopy.nom || "Nom du projet"
-  const newId = Date.now()
-  const newName = currentName + " (Copie)"
-
-  projects.value.push({ id: newId, nom: newName })
-
-  const keys = Object.keys(localStorage)
-  keys.forEach(key => {
-    if (key.includes(id.toString()) && !key.startsWith('appli_saves_')) {
-      const newKey = key.replace(id.toString(), newId.toString())
-      localStorage.setItem(newKey, localStorage.getItem(key))
-    }
-  })
-
-  selectProject(newId)
-}
-
-const removeSpecificProject = (id) => {
+const removeSpecificProject = async (id) => {
+  const targetId = Number(id)
   if (projects.value.length <= 1) {
     alert("Vous devez conserver au moins un projet.")
     return
   }
 
-  if (confirm("Attention cette action est irréversible, toutes les données seront perdues.")) {
-    projects.value = projects.value.filter(p => p.id !== id)
-    const keys = Object.keys(localStorage)
-    keys.forEach(key => {
-      if (key.includes(id.toString())) {
-        localStorage.removeItem(key)
+  if (confirm("Attention cette action est irréversible, toutes les données du projet seront supprimées.")) {
+    projects.value = projects.value.filter(p => p.id !== targetId)
+    localStorage.removeItem(`appli_saves_${targetId}`)
+
+    // Suppression dans IndexedDB
+    for (const table of db.tables) {
+      const all = await table.toArray()
+      const idsToDelete = all.filter(item => String(item.projectId) === String(targetId)).map(item => item.id)
+      if (idsToDelete.length > 0) {
+        await table.bulkDelete(idsToDelete)
       }
-    })
-    if (activeProjectId.value === id && projects.value.length > 0) {
-      activeProjectId.value = projects.value[0].id
+    }
+
+    if (activeProjectId.value === targetId && projects.value.length > 0) {
+      selectProject(projects.value[0].id)
     }
   }
 }
 
-// --- GESTION DU SWIPE ---
+// ==========================================
+// 8. RESTAURATION ET MAPPING D'IDENTIFIANTS
+// ==========================================
+const restaurerDonneesEnBase = async (dataMap, targetProjectId) => {
+  const patientIdMap = {}
+
+  // 1. Ré-insérer les patients et faire la correspondance des anciens ID -> nouveaux ID
+  if (Array.isArray(dataMap.patients)) {
+    for (const p of dataMap.patients) {
+      const oldId = p.id
+      const { id, ...patientData } = p
+      patientData.projectId = targetProjectId
+      const newPatientId = await db.patients.add(patientData)
+      if (oldId) {
+        patientIdMap[oldId] = newPatientId
+      }
+    }
+  }
+
+  // 2. Ré-insérer les séances avec l'ID patient ré-attribué
+  if (Array.isArray(dataMap.seances)) {
+    for (const s of dataMap.seances) {
+      const { id, ...seanceData } = s
+      seanceData.projectId = targetProjectId
+      if (seanceData.patientId && patientIdMap[seanceData.patientId]) {
+        seanceData.patientId = patientIdMap[seanceData.patientId]
+      }
+      await db.seances.add(seanceData)
+    }
+  }
+
+  // 3. Ré-insérer les factures (si existantes)
+  if (db.factures && Array.isArray(dataMap.factures)) {
+    for (const f of dataMap.factures) {
+      const { id, ...factureData } = f
+      factureData.projectId = targetProjectId
+      if (factureData.patientId && patientIdMap[factureData.patientId]) {
+        factureData.patientId = patientIdMap[factureData.patientId]
+      }
+      await db.factures.add(factureData)
+    }
+  }
+}
+
+// ==========================================
+// HELPER : GESTION DU RENOMMAGE (OUI / NON / ANNULER)
+// ==========================================
+const demanderOptionRenommage = (nomParDefaut, actionLibelle) => {
+  const nomSaisi = prompt(`Nom du projet à ${actionLibelle} :`, nomParDefaut)
+
+  // Clic sur "Annuler" -> Retour en arrière (abandon)
+  if (nomSaisi === null) return null
+
+  // Si le champ est vidé, on garde le nom par défaut, sinon on prend le nouveau nom
+  return nomSaisi.trim() || nomParDefaut
+}
+
+// ==========================================
+// DUPLICATION DU PROJET
+// ==========================================
+const duplicateProject = async (id) => {
+  const targetId = Number(id || activeProjectId.value)
+  if (!targetId) return alert("Aucun projet sélectionné à dupliquer.")
+
+  const projOriginal = projects.value.find(p => p.id === targetId)
+  if (!projOriginal) return alert("Projet introuvable.")
+
+  const nomPropose = `Copie de ${projOriginal.nom || 'Projet'}`
+
+  // Demande selon le flux Oui / Non / Annuler
+  const nomFinal = demanderOptionRenommage(nomPropose, "dupliqué")
+  if (nomFinal === null) return // Annuler = Abandon de la duplication
+
+  const newId = Date.now()
+  const dataMap = await extraireDonneesProjet(targetId)
+  await restaurerDonneesEnBase(dataMap, newId)
+
+  projects.value.push({ id: newId, nom: nomFinal })
+  selectProject(newId)
+}
+
+const dupliquerProjet = duplicateProject
+
+// ==========================================
+// 9. EXPORTATION ET IMPORTATION (CSV / JSON)
+// ==========================================
+const escapeCsvValue = (val) => {
+  if (val === null || val === undefined) return '""'
+  const str = String(val)
+  if (str.includes(';') || str.includes('\n') || str.includes('\r') || str.includes('"')) {
+    return `"${str.replace(/"/g, '""')}"`
+  }
+  return str
+}
+
+const parseCSVLine = (line) => {
+  const values = []
+  let currentVal = ''
+  let inQuotes = false
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        currentVal += '"'
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (char === ';' && !inQuotes) {
+      values.push(currentVal)
+      currentVal = ''
+    } else {
+      currentVal += char
+    }
+  }
+  values.push(currentVal)
+  return values
+}
+
+const sauvegarderFichier = async (blob, nomParDefaut, typesFichier) => {
+  if ('showSaveFilePicker' in window) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: nomParDefaut,
+        types: typesFichier
+      })
+      const writable = await handle.createWritable()
+      await writable.write(blob)
+      await writable.close()
+      return
+    } catch (err) {
+      if (err.name === 'AbortError') return
+    }
+  }
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = nomParDefaut
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+const exporterProjetJSON = async () => {
+  const id = activeProjectId.value
+  if (!id) return alert("Aucun projet actif sélectionné.")
+
+  const proj = projects.value.find(p => p.id === Number(id))
+  const projNameOriginal = proj?.nom || 'Projet'
+
+  // Demande le nom selon le flux Oui / Non / Annuler
+  const projNameExport = demanderOptionRenommage(projNameOriginal, "exporté")
+  if (projNameExport === null) return // Annuler = Abandon de l'exportation
+
+  const data = await extraireDonneesProjet(id)
+
+  const exportPayload = {
+    version: 1,
+    id: id,
+    nom: projNameExport,
+    exportedAt: new Date().toISOString(),
+    data: data
+  }
+
+  const jsonStr = JSON.stringify(exportPayload, null, 2)
+  const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' })
+
+  const nomFichier = `${projNameExport.replace(/[/\\?%*:|"<>]/g, '_')}_export.json`
+
+  await sauvegarderFichier(blob, nomFichier, [{
+    description: 'Fichier JSON',
+    accept: { 'application/json': ['.json'] }
+  }])
+}
+
+const exporterProjetCSV = async () => {
+  const id = activeProjectId.value
+  if (!id) return alert("Aucun projet actif sélectionné.")
+
+  const proj = projects.value.find(p => p.id === Number(id))
+  const projNameOriginal = proj?.nom || 'Projet'
+
+  // Demande le nom selon le flux Oui / Non / Annuler
+  const projNameExport = demanderOptionRenommage(projNameOriginal, "exporté")
+  if (projNameExport === null) return // Annuler = Abandon de l'exportation
+
+  const data = await extraireDonneesProjet(id)
+
+  const csvLines = []
+  csvLines.push(`__PROJECT_ID__;${id}`)
+  csvLines.push(`__PROJECT_NAME__;${escapeCsvValue(projNameExport)}`)
+
+  for (const tableName of Object.keys(data)) {
+    csvLines.push(`---TABLE:${tableName}---`)
+    const rows = data[tableName]
+    if (rows && rows.length > 0) {
+      const keys = Object.keys(rows[0])
+      csvLines.push(keys.join(';'))
+      rows.forEach(row => {
+        csvLines.push(keys.map(k => escapeCsvValue(row[k])).join(';'))
+      })
+    }
+  }
+
+  const csvContent = csvLines.join('\n')
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+
+  const nomFichier = `${projNameExport.replace(/[/\\?%*:|"<>]/g, '_')}_export.csv`
+
+  await sauvegarderFichier(blob, nomFichier, [{
+    description: 'Fichier CSV (Excel)',
+    accept: { 'text/csv': ['.csv'] }
+  }])
+}
+
+const declencherImport = () => {
+  const inputEl = fileInputRef.value || document.getElementById('projectFileInput')
+  if (inputEl) {
+    inputEl.value = ''
+    inputEl.click()
+  } else {
+    alert("Erreur : Champ de sélection de fichier introuvable.")
+  }
+}
+
+const importerFichierProjet = (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = async (e) => {
+    const content = e.target.result
+    try {
+      if (file.name.endsWith('.json')) {
+        await traiterImportJSON(content)
+      } else if (file.name.endsWith('.csv')) {
+        await traiterImportCSV(content)
+      } else {
+        alert("Format non supporté. Veuillez choisir un fichier .csv ou .json")
+      }
+    } catch (err) {
+      console.error("Erreur d'importation :", err)
+      alert("Erreur lors de l'importation. Le fichier est invalide ou corrompu.")
+    }
+  }
+  reader.readAsText(file, 'UTF-8')
+}
+
+const traiterImportJSON = async (jsonStr) => {
+  const payload = JSON.parse(jsonStr)
+  if (!payload.nom || !payload.data) {
+    alert("Fichier JSON invalide : structure incomplète.")
+    return
+  }
+  await restaurerProjetImporte(payload.nom, payload.data)
+}
+
+const traiterImportCSV = async (csvStr) => {
+  const cleanCsv = csvStr.replace(/^\uFEFF/, '')
+  const lines = cleanCsv.split(/\r?\n/)
+
+  let importedName = "Projet Importé"
+  const data = {}
+  let currentTable = null
+  let tableHeaders = []
+
+  for (let line of lines) {
+    line = line.trim()
+    if (!line) continue
+
+    if (line.startsWith('__PROJECT_NAME__;')) {
+      importedName = line.split(';')[1]?.replace(/^"|"$/g, '') || "Projet Importé"
+      continue
+    }
+
+    if (line.startsWith('---TABLE:')) {
+      currentTable = line.replace('---TABLE:', '').replace('---', '').trim()
+      data[currentTable] = []
+      tableHeaders = []
+      continue
+    }
+
+    if (currentTable) {
+      const parts = parseCSVLine(line)
+      if (tableHeaders.length === 0) {
+        tableHeaders = parts
+      } else {
+        const row = {}
+        tableHeaders.forEach((h, idx) => {
+          let val = parts[idx] ?? ''
+          if (val !== '' && !isNaN(val)) val = Number(val)
+          row[h] = val
+        })
+        data[currentTable].push(row)
+      }
+    }
+  }
+
+  await restaurerProjetImporte(importedName, data)
+}
+
+const restaurerProjetImporte = async (nomProjet, dataMap) => {
+  const newId = Date.now()
+  const nomFinal = `${nomProjet} (Importé)`
+
+  await restaurerDonneesEnBase(dataMap, newId)
+
+  projects.value.push({ id: newId, nom: nomFinal })
+  selectProject(newId)
+
+  alert(`Le projet « ${nomFinal} » a été importé avec succès avec toutes ses données !`)
+}
+
+// ==========================================
+// 10. GESTION DU SWIPE SUR MOBILE
+// ==========================================
 let touchStartX = 0
 let touchStartY = 0
 let touchEndX = 0
@@ -420,16 +750,16 @@ const gererSwipe = () => {
           <h2 class="sidebar-title">{{ currentProjectName }}</h2>
         </div>
 
-      <div class="sidebar-actions">
-        <button 
-          @click="afficherPreferences = true" 
-          class="btn-icon" 
-          title="Préférences Système"
-          style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 2rem; line-height: 1; padding: 0;"
-        >
-          <span style="display: inline-block; transform: translateY(-2px);">⚙</span>
-        </button>
-      </div>
+        <div class="sidebar-actions">
+          <button 
+            @click="afficherPreferences = true" 
+            class="btn-icon" 
+            title="Préférences Système"
+            style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 2rem; line-height: 1; padding: 0;"
+          >
+            <span style="display: inline-block; transform: translateY(-2px);">⚙</span>
+          </button>
+        </div>
       </div>
 
       <nav class="sidebar-nav">
@@ -541,6 +871,56 @@ const gererSwipe = () => {
               </div>
             </div>
           </div>
+
+          <!-- === SECTION EXPORT / IMPORT (Tout en bas) === -->
+          <hr style="margin: 20px 0; border: none; border-top: 1px solid #e2e8f0;" />
+
+          <div class="export-import-section">
+            <label style="font-weight: 600; display: block; margin-bottom: 8px;">
+              💾 Sauvegarde & Transfert de projet
+            </label>
+
+            <!-- Input invisible pour sélectionner le fichier -->
+            <input 
+              id="projectFileInput"
+              type="file" 
+              ref="fileInputRef" 
+              accept=".csv,.json" 
+              @change="importerFichierProjet" 
+              style="display: none;" 
+            />
+
+            <!-- Boutons d'exportation et d'importation -->
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button 
+                type="button" 
+                @click.prevent="exporterProjetCSV" 
+                class="btn-secondary-action" 
+                title="Exporter vers Excel / CSV"
+              >
+                📥 Exporter CSV (Excel)
+              </button>
+
+              <button 
+                type="button" 
+                @click.prevent="exporterProjetJSON" 
+                class="btn-secondary-action" 
+                title="Exporter en fichier JSON complet"
+              >
+                📦 Exporter JSON
+              </button>
+
+              <button 
+                type="button" 
+                @click.prevent="declencherImport" 
+                class="btn-primary" 
+                title="Importer un fichier .csv ou .json"
+              >
+                📤 Importer un projet
+              </button>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
@@ -610,7 +990,7 @@ const gererSwipe = () => {
     </div>
 
     <!-- FENÊTRE DES PRÉFÉRENCES SYSTÈME -->
-<div v-if="afficherPreferences" class="modal-backdrop">
+    <div v-if="afficherPreferences" class="modal-backdrop">
       <div class="modal-box">
         <header class="modal-header">
           <h3><span style="font-size: 1.2em; vertical-align: middle; margin-right: 10px;">⚙️</span> Préférences Système</h3>
@@ -644,7 +1024,7 @@ const gererSwipe = () => {
       </div>
     </div>
 
-<!-- FENÊTRE DE MODIFICATION DU MOT DE PASSE (UNIQUE VUE) -->
+    <!-- FENÊTRE DE MODIFICATION DU MOT DE PASSE -->
     <div v-if="showPasswordModal" class="modal-backdrop" style="z-index: 110;">
       <div class="modal-box password-modal">
         <header class="modal-header">
@@ -653,8 +1033,7 @@ const gererSwipe = () => {
         </header>
 
         <form @submit.prevent="handlePasswordChange" class="password-body" style="padding: 16px 0;">
-          
-          <!-- Mot de passe actuel + Œil + Petit bouton carré vert ✔ -->
+          <!-- Mot de passe actuel + Œil + Bouton ✔ -->
           <div class="input-group">
             <label>Mot de passe actuel</label>
             <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
@@ -667,7 +1046,6 @@ const gererSwipe = () => {
                 style="flex: 1;"
               />
 
-              <!-- Bouton Œil (Ancien mot de passe) -->
               <button 
                 type="button" 
                 @click.prevent="showOldPassword = !showOldPassword" 
@@ -677,7 +1055,6 @@ const gererSwipe = () => {
                 {{ showOldPassword ? '🙈' : '👁️' }}
               </button>
 
-              <!-- Petit bouton carré vert ✔ -->
               <button 
                 type="button" 
                 @click.prevent="verifyOldPassword" 
@@ -703,7 +1080,6 @@ const gererSwipe = () => {
                 style="flex: 1;"
               />
 
-              <!-- Bouton Œil (Nouveau mot de passe) -->
               <button 
                 type="button" 
                 @click.prevent="showNewPassword = !showNewPassword" 
