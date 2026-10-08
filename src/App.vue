@@ -112,7 +112,44 @@ const changerTab = (id) => {
 }
 
 // ==========================================
-// 3. GESTION DES PROJETS ET ÉTAT DU STOCKAGE
+// 3. GESTION DES DONNÉES DU PROJET ACTIF (DEXIE)
+// ==========================================
+const patients = ref([])
+const seances = ref([])
+
+// Recharge les patients et séances du projet actif depuis IndexedDB
+const chargerDonneesProjetActif = async () => {
+  if (!activeProjectId.value) {
+    patients.value = []
+    seances.value = []
+    return
+  }
+
+  try {
+    const targetIdStr = String(activeProjectId.value)
+
+    if (db.patients) {
+      const allPatients = await db.patients.toArray()
+      patients.value = allPatients.filter(p => p && String(p.projectId) === targetIdStr)
+    } else {
+      patients.value = []
+    }
+
+    if (db.seances) {
+      const allSeances = await db.seances.toArray()
+      seances.value = allSeances.filter(s => s && String(s.projectId) === targetIdStr)
+    } else {
+      seances.value = []
+    }
+  } catch (err) {
+    console.error("Erreur lors de la lecture IndexedDB :", err)
+    patients.value = []
+    seances.value = []
+  }
+}
+
+// ==========================================
+// 4. GESTION DES PROJETS ET ÉTAT DU STOCKAGE
 // ==========================================
 const projects = ref([])
 const activeProjectId = ref(null)
@@ -158,7 +195,7 @@ const lastSaveText = computed(() => {
 })
 
 // ==========================================
-// 4. MOTEUR D'EXTRACTION INDEXEDDB (DEXIE)
+// 5. MOTEUR D'EXTRACTION INDEXEDDB (DEXIE)
 // ==========================================
 
 // Extrait toutes les entités rattachées au projectId depuis la base Dexie
@@ -176,7 +213,7 @@ const extraireDonneesProjet = async (targetId) => {
 }
 
 // ==========================================
-// 5. HISTORIQUE DE SAUVEGARDES INTERNES
+// 6. HISTORIQUE DE SAUVEGARDES INTERNES
 // ==========================================
 const loadProjectSaves = () => {
   if (!activeProjectId.value) return
@@ -244,6 +281,7 @@ const rechargerSave = async (save) => {
     await restaurerDonneesEnBase(save.data, targetId)
 
     appKey.value++
+    await chargerDonneesProjetActif()
     showSavesModal.value = false
   }
 }
@@ -275,9 +313,9 @@ const deleteSelectedSaves = () => {
 }
 
 // ==========================================
-// 6. LIFECYCLE ET WATCHERS
+// 7. LIFECYCLE ET WATCHERS
 // ==========================================
-onMounted(() => {
+onMounted(async () => {
   const requirePassword = localStorage.getItem('app_require_password_on_launch') === 'true'
   const auth = localStorage.getItem('app_authenticated')
 
@@ -309,22 +347,36 @@ onMounted(() => {
   }
 
   loadProjectSaves()
+  await chargerDonneesProjetActif()
 })
 
 watch(projects, (newVal) => {
   localStorage.setItem('appli_projects', JSON.stringify(newVal))
 }, { deep: true })
 
-watch(activeProjectId, (newVal) => {
+watch(activeProjectId, async (newVal) => {
   if (newVal) {
     localStorage.setItem('appli_active_project_id', newVal.toString())
     loadProjectSaves()
     appKey.value++
+    await chargerDonneesProjetActif()
   }
 })
 
+// Recharger les données dès que l'utilisateur revient sur l'accueil
+watch(currentTab, async (newTab) => {
+  if (newTab === 'accueil') {
+    await chargerDonneesProjetActif()
+  }
+})
+
+// Recharger les données si la clé de l'application est réinitialisée
+watch(appKey, async () => {
+  await chargerDonneesProjetActif()
+})
+
 // ==========================================
-// 7. ACTIONS SUR LES PROJETS ET DUPLICATION
+// 8. ACTIONS SUR LES PROJETS ET DUPLICATION
 // ==========================================
 const openProjectModal = () => {
   showProjectListDropdown.value = false
@@ -383,12 +435,14 @@ const removeSpecificProject = async (id) => {
 
     if (activeProjectId.value === targetId && projects.value.length > 0) {
       selectProject(projects.value[0].id)
+    } else {
+      await chargerDonneesProjetActif()
     }
   }
 }
 
 // ==========================================
-// 8. RESTAURATION ET MAPPING D'IDENTIFIANTS
+// 9. RESTAURATION ET MAPPING D'IDENTIFIANTS
 // ==========================================
 const restaurerDonneesEnBase = async (dataMap, targetProjectId) => {
   const patientIdMap = {}
@@ -432,7 +486,7 @@ const restaurerDonneesEnBase = async (dataMap, targetProjectId) => {
 }
 
 // ==========================================
-// HELPER : GESTION DU RENOMMAGE (OUI / NON / ANNULER)
+// HELPER : GESTION DU RENOMMAGE
 // ==========================================
 const demanderOptionRenommage = (nomParDefaut, actionLibelle) => {
   const nomSaisi = prompt(`Nom du projet à ${actionLibelle} :`, nomParDefaut)
@@ -467,7 +521,7 @@ const duplicateProject = async (id) => {
 const dupliquerProjet = duplicateProject
 
 // ==========================================
-// 9. EXPORTATION ET IMPORTATION SUR MESURE
+// 10. EXPORTATION ET IMPORTATION SUR MESURE
 // ==========================================
 
 // États de la modale d'importation
@@ -674,9 +728,8 @@ const préchaufferImportJSON = async (jsonStr) => {
   importData.value = dataMap
   importOption.value = 'full'
 
-  // Sélectionne par défaut tous les patients pour l'option sectorielle
-  const patients = dataMap.patients || []
-  selectedPatientIds.value = patients.map(p => p.id)
+  const patientsList = dataMap.patients || []
+  selectedPatientIds.value = patientsList.map(p => p.id)
 
   showImportModal.value = true
 }
@@ -727,8 +780,8 @@ const préchaufferImportCSV = async (csvStr) => {
   importData.value = data
   importOption.value = 'full'
 
-  const patients = data.patients || []
-  selectedPatientIds.value = patients.map(p => p.id)
+  const patientsList = data.patients || []
+  selectedPatientIds.value = patientsList.map(p => p.id)
 
   showImportModal.value = true
 }
@@ -738,10 +791,8 @@ const validerImportation = async () => {
   if (!importData.value) return
 
   if (importOption.value === 'full') {
-    // 1. IMPORT DU PROJET COMPLET
     await restaurerProjetImporte(importProjectName.value, importData.value)
   } else {
-    // 2. IMPORT SECTORIEL (Fiches patients uniquement)
     if (!activeProjectId.value) {
       return alert("Aucun projet actif sélectionné pour recevoir les fiches.")
     }
@@ -756,9 +807,10 @@ const validerImportation = async () => {
 
     await ajouterPatientsAuProjet(activeProjectId.value, patientsFiltrés)
     alert(`${patientsFiltrés.length} fiche(s) patient(s) importée(s) avec succès dans le projet actuel !`)
-    appKey.value++ // Rafraîchit l'interface
+    appKey.value++
   }
 
+  await chargerDonneesProjetActif()
   fermerModalImport()
 }
 
@@ -791,7 +843,7 @@ const fermerModalImport = () => {
 }
 
 // ==========================================
-// 10. GESTION DU SWIPE SUR MOBILE
+// 11. GESTION DU SWIPE SUR MOBILE
 // ==========================================
 let touchStartX = 0
 let touchStartY = 0
@@ -892,6 +944,8 @@ const gererSwipe = () => {
           :project-id="activeProjectId" 
           :projets="projetsFormatted"
           :date-derniere-sauvegarde="lastSaveText"
+          :patients="patients" 
+          :seances="seances"
           :key="'accueil-' + activeProjectId + '-' + appKey"
           @naviguer="changerTab" 
         />
