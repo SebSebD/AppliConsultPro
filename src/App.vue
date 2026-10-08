@@ -420,15 +420,16 @@ const gererSwipe = () => {
           <h2 class="sidebar-title">{{ currentProjectName }}</h2>
         </div>
 
-        <div class="sidebar-actions">
-          <button 
-            @click="afficherPreferences = true" 
-            class="btn-icon" 
-            title="Préférences Système"
-          >
-            ⚙
-          </button>
-        </div>
+      <div class="sidebar-actions">
+        <button 
+          @click="afficherPreferences = true" 
+          class="btn-icon" 
+          title="Préférences Système"
+          style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 2rem; line-height: 1; padding: 0;"
+        >
+          <span style="display: inline-block; transform: translateY(-2px);">⚙</span>
+        </button>
+      </div>
       </div>
 
       <nav class="sidebar-nav">
@@ -609,10 +610,10 @@ const gererSwipe = () => {
     </div>
 
     <!-- FENÊTRE DES PRÉFÉRENCES SYSTÈME -->
-    <div v-if="afficherPreferences" class="modal-backdrop">
+<div v-if="afficherPreferences" class="modal-backdrop">
       <div class="modal-box">
         <header class="modal-header">
-          <h3>⚙️ Préférences Système</h3>
+          <h3><span style="font-size: 1.2em; vertical-align: middle; margin-right: 10px;">⚙️</span> Préférences Système</h3>
           <button @click="afficherPreferences = false" class="btn-close">✕</button>
         </header>
 
